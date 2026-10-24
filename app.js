@@ -1,4 +1,4 @@
-import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=17";
+import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=18";
 
 const TYPES = {
   spot: { label: "景點", icon: "" },
@@ -246,7 +246,7 @@ const FLIGHT_FIELDS = [["airline", "航空公司", "text"], ["no", "航班編號
 
 function flightCard(key, title, f = {}) {
   return `<div class="card"><div class="meta" style="margin:0 0 4px">${title}</div>
-    <div class="g2">${FLIGHT_FIELDS.map(([k, l, t]) => `<div><label class="f">${l}</label><input data-fl="${key}.${k}" type="${t}" value="${esc(f[k] || "")}"></div>`).join("")}</div></div>`;
+    <div class="g2">${FLIGHT_FIELDS.map(([k, l, t]) => `<div class="${t === "datetime-local" ? "full" : ""}"><label class="f">${l}</label><input data-fl="${key}.${k}" type="${t}" value="${esc(f[k] || "")}"></div>`).join("")}</div></div>`;
 }
 
 function lodgingCard(l) {

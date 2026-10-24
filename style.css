@@ -161,3 +161,11 @@ button.blob.o{background:radial-gradient(90% 80% at 70% 60%,#ff7a1a 0,rgba(255,1
 .foot{justify-content:space-between;align-items:center}
 .foot .push{margin-left:auto}
 #toast button{white-space:nowrap;flex:none}
+/* responsive fix */
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g2>div{min-width:0}
+.g2 .full{grid-column:1/-1}
+input,select,textarea{min-width:0;max-width:100%}
+input[type=date],input[type=datetime-local],input[type=time]{-webkit-appearance:none;appearance:none;min-height:44px;text-align:left}
+.row>div{min-width:0}
+.g2 input[type=datetime-local]{font-size:15px;padding:11px 13px}
