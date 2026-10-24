@@ -1,4 +1,4 @@
-import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=23";
+import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=24";
 
 const TYPES = {
   spot: { label: "景點", icon: "" },
@@ -149,7 +149,7 @@ function nameFromShare(t) {
 function placeCard(p, rank) {
   const t = TYPES[p.type] || TYPES.spot;
   const voted = (p.votes || []).includes(state.me);
-  return `<div class="sw" data-del="places" data-id="${p.id}"><div class="card">
+  return `<div class="sw"><div class="card">
     <div class="row between"><h3>${rank ? `<span class="rankno">${rank}</span>` : ""}${esc(p.name)}</h3>
       <button class="heartbtn ${voted ? "on" : ""}" data-a="vote" data-id="${p.id}" aria-pressed="${voted}" aria-label="${voted ? "取消感興趣" : "我有興趣"}">${HEART}<span>${votesOf(p)}</span></button></div>
     <div class="meta"><span class="tag">${t.label}${p.sub ? " · " + esc(p.sub) : ""}</span> ${p.area ? esc(p.area) : ""}</div>
@@ -171,7 +171,7 @@ function filteredPlaces() {
 }
 function listBody() {
   const ps = filteredPlaces();
-  return ps.length ? ps.map(placeCard).join("") + `<div class="meta" style="text-align:center;margin-top:6px">長按或向左滑卡片可刪除</div>` : (state.q ? `<div class="empty"><p>找不到「${esc(state.q)}」</p></div>` : `<div class="empty"><p><b>還沒有想去的地方</b></p><p class="meta">把想去的景點、美食、展覽、醫美加進來,大家按愛心,最多人想去的會排在上面。</p><button class="btn pri" data-a="addPlace">新增第一個地點</button></div>`);
+  return ps.length ? ps.map(placeCard).join("") : (state.q ? `<div class="empty"><p>找不到「${esc(state.q)}」</p></div>` : `<div class="empty"><p><b>還沒有想去的地方</b></p><p class="meta">把想去的景點、美食、展覽、醫美加進來,大家按愛心,最多人想去的會排在上面。</p><button class="btn pri" data-a="addPlace">新增第一個地點</button></div>`);
 }
 
 function viewList() {
@@ -395,7 +395,8 @@ function placeForm(p = {}) {
     <label class="f">Naver Map 連結(選填)</label><input id="fUrl" type="url" value="${esc(p.url || "")}" placeholder="貼上分享連結">
     <label class="f">參考連結(選填)</label><input id="fRef" type="url" value="${esc(p.ref || "")}" placeholder="IG、部落格、影片">
     <label class="f">備註</label><textarea id="fNote" placeholder="想記下的事">${esc(p.note || "")}</textarea>
-    <div class="actions"><button class="btn pri" data-a="savePlace" data-id="${p.id || ""}">${p.id ? "儲存變更" : "加入清單"}</button></div>`);
+    <div class="actions"><button class="btn pri" data-a="savePlace" data-id="${p.id || ""}">${p.id ? "儲存變更" : "加入清單"}</button></div>
+    ${p.id ? `<div class="actions" style="margin-top:8px"><button class="btn danger" data-a="delPlace" data-id="${p.id}">刪除這個地點</button></div>` : ""}`);
   if (!p.id) $("#fName").focus();
 }
 
@@ -490,6 +491,12 @@ const actions = {
     const e = byId("expenses", el.dataset.id), v = !e.settled;
     store.update("expenses", e.id, { settled: v });
     toast(v ? `「${e.title}」已標為結清` : `「${e.title}」已取消結清`, () => store.update("expenses", e.id, { settled: !v }));
+  },
+  async delPlace(el) {
+    const { id: _i, ...snap } = byId("places", el.dataset.id);
+    await store.remove("places", el.dataset.id);
+    closeModal();
+    toast("已刪除地點", () => store.add("places", snap));
   },
   async delExpense(el) {
     const { id: _i, ...snap } = byId("expenses", el.dataset.id);
