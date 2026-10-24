@@ -178,3 +178,6 @@ input[type=date],input[type=datetime-local],input[type=time]{-webkit-appearance:
 .card input.time{width:132px;flex:none;font-size:13px;padding:7px 8px 7px 11px}
 header.top.home h1{flex:1;text-align:left;font-size:24px;font-weight:600;letter-spacing:-.02em;line-height:1.2;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 header.top.home .me{flex:none;margin-left:12px}
+.seg{display:flex;background:var(--card);border-radius:99px;padding:4px;margin-bottom:10px}
+.seg button{flex:1;border:0;background:none;color:var(--sub);font:inherit;font-size:13px;padding:9px 0;border-radius:99px;cursor:pointer}
+.seg button.on{background:var(--brand);color:var(--brand-ink)}
