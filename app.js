@@ -1,4 +1,4 @@
-import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=32";
+import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=34";
 
 const TYPES = {
   spot: { label: "景點", icon: "" },

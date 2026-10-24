@@ -189,3 +189,41 @@ header.top{padding-bottom:26px;background:linear-gradient(var(--bg) 78%,transpar
 .folder .fin{border-top:1px solid var(--line);margin-top:12px;padding-top:12px}
 .folder .fin b{font-weight:500;font-size:15px}
 .folder .foot{margin-top:14px}
+/* roomier spacing */
+body{line-height:1.6}
+#app{padding:0 24px calc(120px + env(safe-area-inset-bottom))}
+header.top{padding:26px 0 30px}
+.banner{padding:12px 16px;margin-bottom:20px}
+.hero{gap:14px;margin-bottom:24px}
+.hero .blob{min-height:184px;padding:18px}
+.blob.wide{padding:22px;margin-bottom:12px}
+.chips{gap:8px;padding:2px 0 18px}
+.chips.sub{padding-bottom:16px}
+.search{margin-bottom:18px}
+.chk{margin:2px 2px 20px}
+.card{padding:20px;margin-bottom:16px}
+.card h3{line-height:1.4}
+.meta{margin-top:5px}
+.note{margin-top:10px}
+.sw{margin-bottom:16px}
+.sw .card{margin:0}
+h2{margin:34px 2px 14px}
+.foot{margin-top:18px}
+.exmain{margin-top:14px}
+.exdetail{margin-top:12px;gap:4px 12px}
+.folder .fin{margin-top:16px;padding-top:16px}
+.folder .foot{margin-top:18px}
+.row{gap:10px}
+.btn{padding:9px 18px}
+.btn.sm{padding:7px 15px}
+.settle{padding:13px 0}
+.empty{padding:56px 0}
+.sheet{padding:26px 24px calc(28px + env(safe-area-inset-bottom))}
+.shead{margin-bottom:10px}
+label.f{margin:20px 2px 8px}
+.actions{margin-top:28px}
+.checks{gap:8px}
+.pick{padding:16px 4px}
+.gate{margin-top:18vh}
+.fab{right:max(24px,calc(50% - 256px))}
+.rk{min-width:0}.rk .t{min-width:0}.rk .c{flex:none}.hero .rk .n{flex:none}
