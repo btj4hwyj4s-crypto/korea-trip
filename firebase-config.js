@@ -1,10 +1,9 @@
-// 轉去 Firebase 時,把 Firebase 主控台「專案設定 → 您的應用程式 → 網頁應用程式」的設定貼在這裡。
-// apiKey 留空 = 本機測試模式(資料只存在自己的瀏覽器,不會同步)。
+// Firebase 網頁設定(不是機密,公開 repo 沒問題)。apiKey 留空 = 本機測試模式。
 export const firebaseConfig = {
-  apiKey: "",
-  authDomain: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: "",
+  apiKey: "AIzaSyAJ3ZRMwW8pjYVk4k3fT90NmydJq7j0qtg",
+  authDomain: "korea-trip-a88f7.firebaseapp.com",
+  projectId: "korea-trip-a88f7",
+  storageBucket: "korea-trip-a88f7.firebasestorage.app",
+  messagingSenderId: "299641046505",
+  appId: "1:299641046505:web:56eb218ec85f47f42d7778",
 };
