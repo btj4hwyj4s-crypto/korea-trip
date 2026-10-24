@@ -5,7 +5,11 @@ export const isCloud = !!(firebaseConfig && firebaseConfig.apiKey);
 export const DEFAULT_SETTINGS = {
   members: ["貝俞", "思瑜", "乃懿", "綺雯", "景岳"],
   days: 5,
-  startDate: "",
+  startDate: "2026-12-18",
+  flights: {
+    out: { airline: "中華航空", no: "CI160", from: "台北桃園國際機場 T1", to: "首爾仁川國際機場 T2", dep: "2026-12-18T07:50", arr: "2026-12-18T11:20" },
+    back: { airline: "中華航空", no: "CI161", from: "首爾仁川國際機場 T2", to: "台北桃園國際機場 T1", dep: "2026-12-22T12:30", arr: "2026-12-22T14:20" },
+  },
   rate: 0.023, // 1 韓元 = ? 新台幣
 };
 
