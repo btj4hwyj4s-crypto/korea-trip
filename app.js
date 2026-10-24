@@ -1,4 +1,4 @@
-import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=21";
+import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=23";
 
 const TYPES = {
   spot: { label: "景點", icon: "" },
@@ -136,7 +136,15 @@ const refLabel = (u) => {
     return (map.find(([r]) => r.test(h)) || [0, h])[1];
   } catch { return "參考連結"; }
 };
-const fixUrl = (u) => (u && !/^https?:\/\//i.test(u) ? "https://" + u : u);
+const extractUrl = (t) => (String(t).match(/https?:\/\/[^\s<>"'）)]+/i) || [""])[0];
+const fixUrl = (u) => {
+  const x = /\s/.test(u) ? extractUrl(u) || u.trim() : u;
+  return x && !/^https?:\/\//i.test(x) ? "https://" + x : x;
+};
+function nameFromShare(t) {
+  const lines = String(t).split(/\n/).map((l) => l.trim()).filter((l) => l && !/https?:\/\//i.test(l) && !/^\[.*\]$/.test(l));
+  return lines[0] || "";
+}
 
 function placeCard(p, rank) {
   const t = TYPES[p.type] || TYPES.spot;
@@ -574,7 +582,29 @@ document.addEventListener("keydown", (e) => {
     (e.target.id === "roomIn" ? $("[data-a=enterRoom]") : $("#modal .actions .pri"))?.click();
   }
 });
+document.addEventListener("paste", (e) => {
+  const t = e.target;
+  if (t.id !== "fUrl" && t.id !== "fRef") return;
+  const raw = e.clipboardData?.getData("text") || "";
+  const url = /\s/.test(raw.trim()) ? extractUrl(raw) : "";
+  if (!url) return;
+  e.preventDefault();
+  t.value = url;
+  const nm = $("#fName");
+  if (t.id === "fUrl" && nm && !nm.value.trim()) nm.value = nameFromShare(raw);
+  toast("已自動擷取連結");
+});
 document.addEventListener("input", (e) => {
+  if (e.target.id === "fUrl" || e.target.id === "fRef") {
+    const v = e.target.value;
+    const url = /\s/.test(v.trim()) ? extractUrl(v) : "";
+    if (url) {
+      const nm = $("#fName");
+      if (e.target.id === "fUrl" && nm && !nm.value.trim()) nm.value = nameFromShare(v);
+      e.target.value = url;
+      toast("已自動擷取連結");
+    }
+  }
   if (e.target.id === "q") { state.q = e.target.value; $("#plist").innerHTML = listBody(); }
 });
 
