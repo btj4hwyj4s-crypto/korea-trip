@@ -1,15 +1,11 @@
-import { firebaseConfig } from "./firebase-config.js";
+import { firebaseConfig } from "./firebase-config.js?v=9";
 
 export const isCloud = !!(firebaseConfig && firebaseConfig.apiKey);
 
 export const DEFAULT_SETTINGS = {
   members: ["貝俞", "思瑜", "乃懿", "綺雯", "景岳"],
   days: 5,
-  startDate: "2026-12-18",
-  flights: {
-    out: { airline: "中華航空", no: "CI160", from: "台北桃園國際機場 T1", to: "首爾仁川國際機場 T2", dep: "2026-12-18T07:50", arr: "2026-12-18T11:20" },
-    back: { airline: "中華航空", no: "CI161", from: "首爾仁川國際機場 T2", to: "台北桃園國際機場 T1", dep: "2026-12-22T12:30", arr: "2026-12-22T14:20" },
-  },
+  startDate: "",
   rate: 0.023, // 1 韓元 = ? 新台幣
 };
 
@@ -21,9 +17,9 @@ function localStore(room) {
   const load = () => {
     try {
       const d = JSON.parse(localStorage.getItem(key)) || {};
-      return { places: d.places || [], expenses: d.expenses || [], settings: { ...DEFAULT_SETTINGS, ...(d.settings || {}) } };
+      return { places: d.places || [], expenses: d.expenses || [], settings: { ...DEFAULT_SETTINGS, ...(d.settings || {}) }, ready: true };
     } catch {
-      return { places: [], expenses: [], settings: { ...DEFAULT_SETTINGS } };
+      return { places: [], expenses: [], settings: { ...DEFAULT_SETTINGS }, ready: true };
     }
   };
   let data = load();
@@ -74,21 +70,26 @@ async function cloudStore(room) {
   const app = initializeApp(firebaseConfig);
   const db = fs.getFirestore(app);
   const base = ["rooms", room];
-  let data = { places: [], expenses: [], settings: { ...DEFAULT_SETTINGS } };
+  let data = { places: [], expenses: [], settings: { ...DEFAULT_SETTINGS }, ready: false, error: false };
+  let pending = 3;
+  const first = () => { if (pending > 0 && --pending === 0) data.ready = true; };
+  const fail = () => { data.error = true; emit(); };
   const subs = new Set();
   const emit = () => subs.forEach((cb) => cb(data));
 
   for (const col of ["places", "expenses"]) {
     fs.onSnapshot(fs.collection(db, ...base, col), (snap) => {
       data[col] = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
+      first();
       emit();
-    });
+    }, fail);
   }
   const settingsRef = fs.doc(db, ...base, "meta", "settings");
   fs.onSnapshot(settingsRef, (snap) => {
     data.settings = { ...DEFAULT_SETTINGS, ...(snap.exists() ? snap.data() : {}) };
+    first();
     emit();
-  });
+  }, fail);
 
   return {
     mode: "cloud",
