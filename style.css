@@ -157,3 +157,7 @@ button.blob.o{background:radial-gradient(90% 80% at 70% 60%,#ff7a1a 0,rgba(255,1
 .exdetail{display:flex;flex-wrap:wrap;gap:2px 10px;color:var(--sub);font-size:12px;margin-top:8px}
 .foot{display:flex;justify-content:flex-end;margin-top:10px}
 .push{margin-left:auto}
+.card.done{opacity:.6}
+.foot{justify-content:space-between;align-items:center}
+.foot .push{margin-left:auto}
+#toast button{white-space:nowrap;flex:none}

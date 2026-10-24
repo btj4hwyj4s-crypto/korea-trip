@@ -1,4 +1,4 @@
-import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=13";
+import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=15";
 
 const TYPES = {
   spot: { label: "景點", icon: "" },
@@ -29,6 +29,8 @@ const state = {
   tab: "list",
   type: "all",
   q: "",
+  exDate: "",
+  exStatus: "all",
   sub: "",
   page: null,
   day: 1,
@@ -53,7 +55,7 @@ function dayLabel(i) {
 
 function settlement() {
   const net = members().map(() => 0);
-  for (const e of state.data.expenses) {
+  for (const e of state.data.expenses.filter((x) => !x.settled)) {
     const ps = e.participants?.length ? e.participants : members().map((_, i) => i);
     net[e.payer] += e.krw;
     ps.forEach((p) => (net[p] -= e.krw / ps.length));
@@ -205,8 +207,8 @@ function expenseCard(e) {
   const r = state.data.settings.rate;
   const n = e.participants?.length || members().length;
   const who = n === members().length ? "全員分攤" : `${n} 人分攤`;
-  return `<div class="sw" data-del="expenses" data-id="${e.id}"><div class="card">
-    <div class="row"><span class="tag">${esc(e.category || "其他")}</span><span class="meta" style="margin:0">${shortDate(e.date)}</span></div>
+  return `<div class="sw" data-del="expenses" data-id="${e.id}"><div class="card ${e.settled ? "done" : ""}">
+    <div class="row"><span class="tag">${esc(e.category || "其他")}</span><span class="meta" style="margin:0">${shortDate(e.date)}</span>${e.settled ? `<span class="meta" style="margin:0 0 0 auto">已結清</span>` : ""}</div>
     <div class="exmain">
       <h3>${esc(e.title)}</h3>
       <div class="amt"><b>${krwFmt(e.krw)}</b><span class="meta">≈ ${twdFmt(e.krw * r)}</span></div>
@@ -215,19 +217,29 @@ function expenseCard(e) {
       <span>${esc(nameOf(e.payer))} 付</span><span>${who}・每人 ${krwFmt(e.krw / n)}</span>
       ${e.currency === "TWD" ? `<span>原幣 ${twdFmt(e.amount)}</span>` : ""}
     </div>
-    <div class="foot"><button class="btn sm push" data-a="editExpense" data-id="${e.id}">編輯</button></div></div></div>`;
+    <div class="foot"><button class="btn sm" data-a="toggleSettled" data-id="${e.id}">${e.settled ? "取消結清" : "標為已結清"}</button><button class="btn sm push" data-a="editExpense" data-id="${e.id}">編輯</button></div></div></div>`;
 }
 
 function viewMoney() {
-  const ex = [...state.data.expenses].sort((a, b) => (b.date || "").localeCompare(a.date || "") || b.createdAt - a.createdAt);
-  const total = ex.reduce((s, e) => s + e.krw, 0);
-  const { net, transfers } = settlement();
+  const all = [...state.data.expenses].sort((a, b) => (b.date || "").localeCompare(a.date || "") || b.createdAt - a.createdAt);
+  const open = all.filter((e) => !e.settled);
+  const total = open.reduce((s, e) => s + e.krw, 0);
+  const settledSum = all.filter((e) => e.settled).reduce((s, e) => s + e.krw, 0);
+  const { transfers } = settlement();
   const r = state.data.settings.rate;
-  return `<div class="blob o wide"><span class="lbl">總支出</span><span class="num">${krwFmt(total)}</span><span class="sub">約 ${twdFmt(total * r)} · 匯率 1 韓元 = NT$${r}</span></div>
-    <h2>結算</h2>
-    <div class="card">${transfers.length ? transfers.map((t) => `<div class="settle"><span>${esc(nameOf(t.from))} 付給 ${esc(nameOf(t.to))}</span><b>${krwFmt(t.amt)} <span class="meta">(${twdFmt(t.amt * r)})</span></b></div>`).join("") : `<div class="meta">大家都結清了,不用互相轉帳</div>`}</div>
-    <h2>明細(${ex.length})</h2>
-    ${ex.length ? ex.map(expenseCard).join("") + `<div class="meta" style="text-align:center">長按或向左滑卡片可刪除</div>` : `<div class="empty"><p><b>還沒有支出</b></p><p class="meta">記下每一筆花費,最後自動算出誰該付給誰。</p><button class="btn pri" data-a="addExpense">記第一筆</button></div>`}`;
+  const dates = [...new Set(all.map((e) => e.date).filter(Boolean))];
+  if (state.exDate && !dates.includes(state.exDate)) state.exDate = "";
+  const ex = all.filter((e) => (!state.exDate || e.date === state.exDate) && (state.exStatus === "all" || (state.exStatus === "open") === !e.settled));
+  const sub = ex.reduce((s, e) => s + e.krw, 0);
+  const chip = (cls, a, v, l) => `<button class="chip ${cls}" data-a="${a}" data-v="${v}">${l}</button>`;
+  return `<div class="blob o wide"><span class="lbl">未結清</span><span class="num">${krwFmt(total)}</span><span class="sub">約 ${twdFmt(total * r)} · 匯率 1 韓元 = NT$${r}${settledSum ? ` · 已結清 ${krwFmt(settledSum)}` : ""}</span></div>
+    <h2>誰該付給誰</h2>
+    <div class="card">${transfers.length ? transfers.map((t) => `<div class="settle"><span>${esc(nameOf(t.from))} 付給 ${esc(nameOf(t.to))}</span><b>${krwFmt(t.amt)} <span class="meta">(${twdFmt(t.amt * r)})</span></b></div>`).join("") : `<div class="meta">${all.length ? "目前沒有未結清的款項" : "還沒有支出"}</div>`}</div>
+    <h2>明細</h2>
+    ${all.length ? `<div class="chips">${chip(!state.exDate ? "on" : "", "exDate", "", "全部日期")}${dates.map((d) => chip(state.exDate === d ? "on" : "", "exDate", d, shortDate(d))).join("")}</div>
+    <div class="chips sub">${[["all", "全部"], ["open", "未結清"], ["done", "已結清"]].map(([k, l]) => chip(state.exStatus === k ? "on" : "", "exStatus", k, l)).join("")}</div>
+    <div class="meta" style="margin:0 2px 10px">${ex.length} 筆 · ${krwFmt(sub)}</div>` : ""}
+    ${ex.length ? ex.map(expenseCard).join("") + `<div class="meta" style="text-align:center">長按或向左滑卡片可刪除</div>` : all.length ? `<div class="empty"><p class="meta">這個條件下沒有支出</p></div>` : `<div class="empty"><p><b>還沒有支出</b></p><p class="meta">記下每一筆花費,最後自動算出誰該付給誰。</p><button class="btn pri" data-a="addExpense">記第一筆</button></div>`}`;
 }
 
 const FLIGHT_FIELDS = [["airline", "航空公司", "text"], ["no", "航班編號", "text"], ["from", "出發機場", "text"], ["to", "抵達機場", "text"], ["dep", "出發時間", "datetime-local"], ["arr", "抵達時間", "datetime-local"]];
@@ -314,26 +326,30 @@ function effortOf(i) {
 
 function pageEffort() {
   const rows = members().map((m, i) => ({ m, i, ...effortOf(i) }));
-  const sum = rows.reduce((a, r) => a + r.total, 0);
-  const max = Math.max(1, ...rows.map((r) => r.total));
-  return `<div class="blob p wide"><span class="lbl">姊妹們一起累積的心力</span><span class="num">${sum}</span><span class="sub">${sum ? "這趟旅行正在慢慢長出來" : "還沒開始也沒關係,慢慢來"}</span></div>
-    ${rows.map((r) => `<div class="card"><div class="row between"><h3>${esc(r.m)}${r.i === state.me ? ` <span class="tag">你</span>` : ""}</h3><span class="effnum">${r.total}</span></div>
-      <div class="bar"><i style="width:${Math.max(6, (r.total / max) * 100)}%"></i></div>
-      <div class="meta">${r.total ? `新增地點 ${r.places} · 記帳 ${r.money} · 住宿 ${r.lodg} · 愛心 ${r.hearts}` : "暖身中,隨時加入都歡迎"}</div></div>`).join("")}
-    <div class="meta" style="text-align:center;margin:14px 0">只是好玩,沒有名次也沒有壓力。每個人的貢獻方式都不一樣。</div>
+  const line = (r) => {
+    const ideas = r.places + r.lodg;
+    if (!r.total) return "還沒有新增內容,慢慢來,想到再加就好。";
+    const parts = [];
+    if (ideas) parts.push(`新增了 ${ideas} 個想法(${[r.places ? `${r.places} 個地點` : "", r.lodg ? `${r.lodg} 間住宿` : ""].filter(Boolean).join("、")})`);
+    if (r.money) parts.push(`記了 ${r.money} 筆帳`);
+    if (r.hearts) parts.push(`對 ${r.hearts} 個地方表示有興趣`);
+    return `替這趟旅途${parts.join(",")}。`;
+  };
+  return `<div class="meta" style="margin:0 2px 12px">大家用不同的方式為這趟旅途出力,只是紀錄一下,沒有名次。</div>
+    ${rows.map((r) => `<div class="card"><h3>${esc(r.m)}${r.i === state.me ? ` <span class="tag">你</span>` : ""}</h3>
+      <div class="note">${line(r)}</div></div>`).join("")}
     <div class="actions"><button class="btn" data-a="switchMe">我不是 ${esc(nameOf(state.me))},切換成員</button></div>`;
 }
 
 // ---------- 可愛小動畫 ----------
-const CHEER_SUB = ["謝謝你的用心", "這趟旅行又更完整了", "有你真好", "一起把行程變可愛", "收到,心力 +1"];
+const CHEER_SUB = ["謝謝你的用心", "這趟旅行又更完整了", "有你真好", "一起把行程變可愛", "收到,謝謝你"];
 function cheer() {
-  const mine = effortOf(state.me).total;
-  let c = $("#cheer");
+    let c = $("#cheer");
   if (!c) { c = document.createElement("div"); c.id = "cheer"; document.body.append(c); }
   const sub = CHEER_SUB[Math.floor(Math.random() * CHEER_SUB.length)];
   c.innerHTML = `<div class="cheerbox"><svg class="hv" viewBox="0 0 24 24" width="84" height="84"><path class="ln" pathLength="100" d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 5 6.4 5c2 0 3.7 1.1 5.6 3.2C13.9 6.1 15.6 5 17.6 5 21 5 23.1 8.4 21.6 11.8 19.5 16.4 12 21 12 21z"/></svg>
     <svg class="sp" style="left:calc(50% - 62px);top:30px;width:18px;height:18px;animation-delay:.9s" viewBox="-9 -9 18 18" fill="#EF9F27"><path d="M0-8L2-2L8 0L2 2L0 8L-2 2L-8 0L-2-2Z"/></svg><svg class="sp" style="left:calc(50% + 44px);top:24px;width:13px;height:13px;animation-delay:1.2s" viewBox="-9 -9 18 18" fill="#ED93B1"><path d="M0-8L2-2L8 0L2 2L0 8L-2 2L-8 0L-2-2Z"/></svg><svg class="sp" style="left:calc(50% + 52px);top:92px;width:16px;height:16px;animation-delay:1s" viewBox="-9 -9 18 18" fill="#EF9F27"><path d="M0-8L2-2L8 0L2 2L0 8L-2 2L-8 0L-2-2Z"/></svg><svg class="sp" style="left:calc(50% - 58px);top:98px;width:12px;height:12px;animation-delay:1.35s" viewBox="-9 -9 18 18" fill="#ED93B1"><path d="M0-8L2-2L8 0L2 2L0 8L-2 2L-8 0L-2-2Z"/></svg>
-    <b>姊妹,這趟旅途你付出了一點心力</b><span>${sub} · 你的心力 ${mine}</span></div>`;
+    <b>姊妹,這趟旅途你付出了一點心力</b><span>${sub}</span></div>`;
   c.className = "";
   void c.offsetWidth;
   c.className = "show";
@@ -462,6 +478,13 @@ const actions = {
     const p = byId("places", el.dataset.id), prev = { day: p.day, time: p.time || "" };
     store.update("places", p.id, { day: 0, time: "" });
     toast(`已將「${p.name}」移出`, () => store.update("places", p.id, prev));
+  },
+  exDate(el) { state.exDate = el.dataset.v; render(); },
+  exStatus(el) { state.exStatus = el.dataset.v; render(); },
+  toggleSettled(el) {
+    const e = byId("expenses", el.dataset.id), v = !e.settled;
+    store.update("expenses", e.id, { settled: v });
+    toast(v ? `「${e.title}」已標為結清` : `「${e.title}」已取消結清`, () => store.update("expenses", e.id, { settled: !v }));
   },
   addExpense: () => expenseForm(),
   editExpense: (el) => expenseForm(byId("expenses", el.dataset.id)),
