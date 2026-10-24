@@ -1,4 +1,4 @@
-import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=15";
+import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=16";
 
 const TYPES = {
   spot: { label: "景點", icon: "" },
@@ -304,7 +304,7 @@ function pageTrip() {
   return `<h2>機票</h2>${flightCard("out", "去程", fl.out)}${flightCard("back", "回程", fl.back)}
     <div class="row between"><h2 style="margin:22px 2px 10px">住宿</h2><button class="btn sm pri" data-a="addLodging">新增住宿</button></div>
     ${lods.length ? lods.map(lodgingCard).join("") + `<div class="meta" style="text-align:center">長按或向左滑卡片可刪除</div>` : `<div class="meta" style="margin:0 2px 10px">尚未新增住宿</div>`}
-    <div class="actions"><button class="btn pri" data-a="saveFlights">儲存機票</button></div>`;
+    <div class="actions"><button class="btn pri" data-a="saveFlights">儲存資訊</button></div>`;
 }
 
 function pageRank() {
@@ -518,7 +518,7 @@ const actions = {
   openEffort() { openPage("effort"); },
   back() { history.state?.page ? history.back() : closePage(); },
   goList() { closePage(); state.tab = "list"; render(); },
-  async saveFlights() { await store.setSettings({ flights: collectFlights() }); toast("已儲存機票"); },
+  async saveFlights() { await store.setSettings({ flights: collectFlights() }); toast("已儲存"); },
   async addLodging() { await store.setSettings({ flights: collectFlights() }); lodgingForm(); },
   editLodging: (el) => lodgingForm((state.data.settings.lodgings || []).find((l) => l.id === el.dataset.id)),
   async saveLodging(el) {
