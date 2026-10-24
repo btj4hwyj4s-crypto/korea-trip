@@ -1,4 +1,4 @@
-import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=29";
+import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=30";
 
 const TYPES = {
   spot: { label: "景點", icon: "" },
@@ -186,10 +186,11 @@ function viewList() {
     <button class="blob o" data-a="openRank"><span class="lbl">大家感興趣的排名</span>
       ${rank.length ? `<div class="rank">${rank.map((p, i) => `<div class="rk"><span class="n">${i + 1}</span><span class="t">${esc(p.name)}</span><span class="c">${votesOf(p)}</span></div>`).join("")}</div>` : `<span class="sub" style="margin-top:auto">按愛心表示感興趣,排名就會出現</span>`}${rank.length ? `<span class="line" style="opacity:.75">點擊看完整排名</span>` : ""}</button></div>`;
   const mineN = all.filter((p) => p.by === state.me).length;
-  const seg = `<div class="seg"><button class="${state.mine ? "" : "on"}" data-a="mine" data-v="0">大家的清單</button><button class="${state.mine ? "on" : ""}" data-a="mine" data-v="1">我的清單${mineN ? ` ${mineN}` : ""}</button></div>`;
+  const seg = "";
   return `${hero}${seg}<input id="q" class="search" type="search" placeholder="搜尋名稱、區域、備註" value="${esc(state.q)}">
     <div class="chips">${chip("all", "全部")}${Object.entries(TYPES).map(([k, t]) => chip(k, t.label)).join("")}</div>
     ${SUBS[state.type] ? `<div class="chips sub">${SUBS[state.type].map((x) => `<button class="chip ${state.sub === x ? "on" : ""}" data-a="subf" data-v="${x}">${x}</button>`).join("")}</div>` : ""}
+    <label class="chk"><input type="checkbox" data-a="mine" ${state.mine ? "checked" : ""}><span>只顯示我的清單${mineN ? `(${mineN})` : ""}</span></label>
     <div id="plist">${listBody()}</div>`;
 }
 
@@ -472,7 +473,6 @@ const actions = {
   pickMe(el) { state.me = Number(el.dataset.v); ls.set("kt:me", state.me); render(); },
   switchMe() { state.me = null; state.page = null; render(); },
   tab(el) { if (state.page) { state.page = null; if (history.state?.page) history.back(); } state.tab = el.dataset.v; render(); window.scrollTo(0, 0); },
-  mine(el) { state.mine = el.dataset.v === "1"; render(); },
   type(el) { state.type = el.dataset.v; state.sub = ""; render(); },
   subf(el) { state.sub = state.sub === el.dataset.v ? "" : el.dataset.v; render(); },
   close: closeModal,
@@ -691,6 +691,7 @@ document.addEventListener("click", (e) => { if (suppress) { suppress = false; e.
 
 document.addEventListener("change", (e) => {
   const el = e.target;
+  if (el.dataset.a === "mine") { state.mine = el.checked; render(); return; }
   if (el.closest?.("#pickList")) {
     el.checked ? pk.sel.add(el.value) : pk.sel.delete(el.value);
     $("#pickGo").textContent = pickCount();
