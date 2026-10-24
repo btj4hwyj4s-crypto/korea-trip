@@ -1,4 +1,4 @@
-import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=24";
+import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=26";
 
 const TYPES = {
   spot: { label: "景點", icon: "" },
@@ -171,7 +171,7 @@ function filteredPlaces() {
 }
 function listBody() {
   const ps = filteredPlaces();
-  return ps.length ? ps.map(placeCard).join("") : (state.q ? `<div class="empty"><p>找不到「${esc(state.q)}」</p></div>` : `<div class="empty"><p><b>還沒有想去的地方</b></p><p class="meta">把想去的景點、美食、展覽、醫美加進來,大家按愛心,最多人想去的會排在上面。</p><button class="btn pri" data-a="addPlace">新增第一個地點</button></div>`);
+  return ps.length ? ps.map((p) => placeCard(p)).join("") : (state.q ? `<div class="empty"><p>找不到「${esc(state.q)}」</p></div>` : `<div class="empty"><p><b>還沒有想去的地方</b></p><p class="meta">把想去的景點、美食、展覽、醫美加進來,大家按愛心,最多人想去的會排在上面。</p><button class="btn pri" data-a="addPlace">新增第一個地點</button></div>`);
 }
 
 function viewList() {
