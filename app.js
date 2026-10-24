@@ -1,4 +1,4 @@
-import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=26";
+import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=28";
 
 const TYPES = {
   spot: { label: "景點", icon: "" },
@@ -104,7 +104,7 @@ function render() {
   document.title = state.data.settings.title || "Korea Trip";
   app.innerHTML = `
     ${pg ? `<header class="top"><button class="back" data-a="back" aria-label="返回">${BACK}<span>返回</span></button><h1>${pg[0]}</h1><span style="width:56px"></span></header>`
-         : `<header class="top"><h1>${title}</h1><button class="me" data-a="openEffort" aria-label="心力小表">我是 ${esc(nameOf(state.me))}</button></header>`}
+         : `<header class="top home"><h1>${title}</h1><button class="me" data-a="openEffort" aria-label="心力小表">我是 ${esc(nameOf(state.me))}</button></header>`}
     ${isCloud ? "" : `<div class="banner">尚未連線雲端:目前的內容只存在這支手機,朋友看不到,也不會同步。</div>`}
     ${body}
     ${!pg && state.tab === "list" ? `<button class="fab" data-a="addPlace" aria-label="新增">新增</button>` : ""}
@@ -400,12 +400,34 @@ function placeForm(p = {}) {
   if (!p.id) $("#fName").focus();
 }
 
+const pk = { type: "all", sub: "", q: "", sel: new Set() };
+
+function pickFilters() {
+  const chip = (on, a, v, l) => `<button class="chip ${on ? "on" : ""}" data-a="${a}" data-v="${v}">${l}</button>`;
+  return `<div class="chips">${chip(pk.type === "all", "pkType", "all", "全部")}${Object.entries(TYPES).map(([k, t]) => chip(pk.type === k, "pkType", k, t.label)).join("")}</div>
+    ${SUBS[pk.type] ? `<div class="chips sub">${SUBS[pk.type].map((x) => chip(pk.sub === x, "pkSub", x, x)).join("")}</div>` : ""}`;
+}
+function pickItems() {
+  const d = state.day, q = pk.q.trim().toLowerCase();
+  const cand = state.data.places
+    .filter((p) => p.day != d)
+    .filter((p) => pk.type === "all" || p.type === pk.type)
+    .filter((p) => !pk.sub || p.sub === pk.sub)
+    .filter((p) => !q || [p.name, p.note, p.sub].some((x) => (x || "").toLowerCase().includes(q)))
+    .sort((a, b) => (a.day ? 1 : 0) - (b.day ? 1 : 0) || votesOf(b) - votesOf(a));
+  if (!cand.length) return `<div class="empty"><p class="meta">沒有符合的地點</p></div>`;
+  return cand.map((p) => `<label class="pick"><input type="checkbox" value="${p.id}" ${pk.sel.has(p.id) ? "checked" : ""}><span class="pt">${esc(p.name)}<span class="meta">${(TYPES[p.type] || TYPES.spot).label}${p.sub ? " · " + esc(p.sub) : ""}${p.day ? " · 目前在 " + dayLabel(p.day) : ""}</span></span><span class="meta">${votesOf(p)} 人</span></label>`).join("");
+}
+const pickCount = () => `加入所選地點${pk.sel.size ? `(${pk.sel.size})` : ""}`;
+
 function pickPlaces() {
-  const d = state.day;
-  const cand = state.data.places.filter((p) => p.day != d).sort((a, b) => (a.day ? 1 : 0) - (b.day ? 1 : 0) || votesOf(b) - votesOf(a));
-  openModal(`${sheetHead("加入 " + dayLabel(d))}
-    ${cand.length ? `<div id="pickList">${cand.map((p) => `<label class="pick"><input type="checkbox" value="${p.id}"><span class="pt">${esc(p.name)}<span class="meta">${(TYPES[p.type] || TYPES.spot).label}${p.area ? " · " + esc(p.area) : ""}${p.day ? " · 目前在 " + dayLabel(p.day) : ""}</span></span><span class="meta">${votesOf(p)} 人</span></label>`).join("")}</div>
-    <div class="actions"><button class="btn pri" data-a="addPicked">加入所選地點</button></div>` : `<div class="empty">清單裡沒有其他地點可以加入</div>`}`);
+  Object.assign(pk, { type: "all", sub: "", q: "", sel: new Set() });
+  const any = state.data.places.some((p) => p.day != state.day);
+  openModal(`${sheetHead("加入 " + dayLabel(state.day))}
+    ${any ? `<input id="pq" class="search" type="search" placeholder="搜尋名稱、備註">
+    <div id="pickFilters">${pickFilters()}</div>
+    <div id="pickList">${pickItems()}</div>
+    <div class="actions"><button class="btn pri" id="pickGo" data-a="addPicked">${pickCount()}</button></div>` : `<div class="empty">清單裡沒有其他地點可以加入</div>`}`);
 }
 
 function expenseForm(e = {}) {
@@ -472,8 +494,10 @@ const actions = {
   },
   day(el) { state.day = Number(el.dataset.v); render(); },
   pickPlaces,
+  pkType(el) { pk.type = el.dataset.v; pk.sub = ""; $("#pickFilters").innerHTML = pickFilters(); $("#pickList").innerHTML = pickItems(); },
+  pkSub(el) { pk.sub = pk.sub === el.dataset.v ? "" : el.dataset.v; $("#pickFilters").innerHTML = pickFilters(); $("#pickList").innerHTML = pickItems(); },
   async addPicked() {
-    const ids = [...document.querySelectorAll("#pickList input:checked")].map((c) => c.value);
+    const ids = [...pk.sel].filter((id) => byId("places", id));
     if (!ids.length) return toast("請先勾選要加入的地點");
     const prev = ids.map((id) => [id, byId("places", id).day || 0]);
     await Promise.all(ids.map((id) => store.update("places", id, { day: state.day })));
@@ -602,6 +626,7 @@ document.addEventListener("paste", (e) => {
   toast("已自動擷取連結");
 });
 document.addEventListener("input", (e) => {
+  if (e.target.id === "pq") { pk.q = e.target.value; $("#pickList").innerHTML = pickItems(); return; }
   if (e.target.id === "fUrl" || e.target.id === "fRef") {
     const v = e.target.value;
     const url = /\s/.test(v.trim()) ? extractUrl(v) : "";
@@ -661,6 +686,11 @@ document.addEventListener("click", (e) => { if (suppress) { suppress = false; e.
 
 document.addEventListener("change", (e) => {
   const el = e.target;
+  if (el.closest?.("#pickList")) {
+    el.checked ? pk.sel.add(el.value) : pk.sel.delete(el.value);
+    $("#pickGo").textContent = pickCount();
+    return;
+  }
   if (el.dataset.a === "time") store.update("places", el.dataset.id, { time: el.value });
 });
 
