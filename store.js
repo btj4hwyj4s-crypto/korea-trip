@@ -1,4 +1,4 @@
-import { firebaseConfig } from "./firebase-config.js?v=31";
+import { firebaseConfig } from "./firebase-config.js?v=32";
 
 export const isCloud = !!(firebaseConfig && firebaseConfig.apiKey);
 

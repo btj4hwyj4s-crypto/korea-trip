@@ -1,4 +1,4 @@
-import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=31";
+import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=32";
 
 const TYPES = {
   spot: { label: "景點", icon: "" },
@@ -202,7 +202,7 @@ function folderCard(f) {
   const closed = state.closed.has(f.id);
   const inner = (p) => `<div class="fin"><div><b>${esc(p.name)}</b><div class="meta">${(TYPES[p.type] || TYPES.spot).label}${p.sub ? " · " + esc(p.sub) : ""}</div></div>
       <div class="row" style="margin-top:8px"><a class="btn sm pri" href="${esc(naverUrl(p))}" target="_blank" rel="noopener" style="text-decoration:none">前往 Naver Map</a>
-      <button class="btn sm push" data-a="unfolder" data-id="${p.id}">移出資料夾</button></div></div>`;
+      <button class="btn sm push" data-a="unfolder" data-id="${p.id}">移除</button></div></div>`;
   return `<div class="card folder">
     <div class="row between"><div><span class="tag">資料夾</span><h3 style="margin-top:6px">${esc(f.title)}</h3></div>
       <button class="btn sm" data-a="toggleFolder" data-id="${f.id}">${closed ? "展開" : "收合"}</button></div>
@@ -243,7 +243,7 @@ function folderForm(f = {}) {
     <label class="f">開始時間(選填)</label><input id="oStart" type="time" value="${esc(f.start || "")}">
     <label class="f">結束時間(選填)</label><input id="oEnd" type="time" value="${esc(f.end || "")}">
     <div class="actions"><button class="btn pri" data-a="saveFolder" data-id="${f.id || ""}">${f.id ? "儲存變更" : "建立資料夾"}</button></div>
-    ${f.id ? `<div class="actions" style="margin-top:8px"><button class="btn danger" data-a="delFolder" data-id="${f.id}">刪除資料夾(裡面的地點會留在這一天)</button></div>` : ""}`);
+    ${f.id ? `<div class="actions" style="margin-top:8px"><button class="btn danger" data-a="delFolder" data-id="${f.id}">刪除整個資料夾(裡面的地點也會從行程移除)</button></div>` : ""}`);
   if (!f.id) $("#oTitle").focus();
 }
 
@@ -566,13 +566,17 @@ const actions = {
   },
   async delFolder(el) {
     const id = el.dataset.id, prev = state.data.settings.folders || [];
-    const kids = state.data.places.filter((p) => p.folder === id).map((p) => [p.id, p.fo || 0]);
-    await Promise.all(kids.map(([pid]) => store.update("places", pid, { folder: "", fo: 0 })));
+    const kids = state.data.places.filter((p) => p.folder === id).map((p) => [p.id, { day: p.day || 0, folder: id, fo: p.fo || 0, time: p.time || "" }]);
+    await Promise.all(kids.map(([pid]) => store.update("places", pid, { day: 0, folder: "", fo: 0, time: "" })));
     await store.setSettings({ folders: prev.filter((f) => f.id !== id) });
     closeModal();
-    toast("已刪除資料夾", async () => { await store.setSettings({ folders: prev }); kids.forEach(([pid, fo]) => store.update("places", pid, { folder: id, fo })); });
+    toast("已刪除資料夾", async () => { await store.setSettings({ folders: prev }); kids.forEach(([pid, v]) => store.update("places", pid, v)); });
   },
-  unfolder: (el) => store.update("places", el.dataset.id, { folder: "", fo: 0 }),
+  unfolder(el) {
+    const p = byId("places", el.dataset.id), prev = { day: p.day || 0, folder: p.folder || "", fo: p.fo || 0, time: p.time || "" };
+    store.update("places", p.id, { day: 0, folder: "", fo: 0, time: "" });
+    toast(`已將「${p.name}」從行程移除`, () => store.update("places", p.id, prev));
+  },
   exDate(el) { state.exDate = el.dataset.v; render(); },
   exStatus(el) { state.exStatus = el.dataset.v; render(); },
   toggleSettled(el) {
