@@ -1,4 +1,4 @@
-import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=11";
+import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=12";
 
 const TYPES = {
   spot: { label: "景點", icon: "" },
@@ -151,7 +151,7 @@ function placeCard(p, rank) {
     <div class="row" style="margin-top:10px">
       <a class="btn sm pri" href="${esc(naverUrl(p))}" target="_blank" rel="noopener" style="text-decoration:none">前往 Naver Map</a>
       ${p.ref && /^https?:\/\//.test(p.ref) ? `<a class="btn sm" href="${esc(p.ref)}" target="_blank" rel="noopener" style="text-decoration:none">${esc(refLabel(p.ref))}</a>` : ""}
-      <button class="btn sm" data-a="editPlace" data-id="${p.id}">編輯</button></div></div></div>`;
+      <button class="btn sm push" data-a="editPlace" data-id="${p.id}">編輯</button></div></div></div>`;
 }
 
 function filteredPlaces() {
@@ -193,11 +193,29 @@ function viewPlan() {
       <div class="meta">${(TYPES[p.type] || TYPES.spot).label}${p.area ? " · " + esc(p.area) : ""}</div>
       <div class="row" style="margin-top:10px">
         <a class="btn sm pri" href="${esc(naverUrl(p))}" target="_blank" rel="noopener" style="text-decoration:none">前往 Naver Map</a>
-        <button class="btn sm" data-a="unplan" data-id="${p.id}">移出</button></div></div>`;
+        <button class="btn sm push" data-a="unplan" data-id="${p.id}">移出</button></div></div>`;
   return `<div class="chips">${tabs}</div>
     <div class="row between" style="margin-bottom:10px"><span class="meta">${ps.length} 個行程</span>
       <div class="row"><button class="btn sm" data-a="autoPlan">自動排入</button><button class="btn sm pri" data-a="pickPlaces">從清單加入</button></div></div>
     ${ps.length ? ps.map(item).join("") : (state.data.places.length ? `<div class="empty"><p><b>這天還沒有行程</b></p><p class="meta">從大家收藏的清單挑地點加進來。</p><button class="btn pri" data-a="pickPlaces">從清單加入</button></div>` : `<div class="empty"><p><b>還沒有可以排的地點</b></p><p class="meta">先到清單新增想去的地方。</p><button class="btn pri" data-a="tab" data-v="list">前往清單</button></div>`)}`;
+}
+
+const shortDate = (d) => (d ? d.slice(5).replace("-", "/") : "");
+function expenseCard(e) {
+  const r = state.data.settings.rate;
+  const n = e.participants?.length || members().length;
+  const who = n === members().length ? "全員分攤" : `${n} 人分攤`;
+  return `<div class="sw" data-del="expenses" data-id="${e.id}"><div class="card">
+    <div class="row"><span class="tag">${esc(e.category || "其他")}</span><span class="meta" style="margin:0">${shortDate(e.date)}</span></div>
+    <div class="exmain">
+      <h3>${esc(e.title)}</h3>
+      <div class="amt"><b>${krwFmt(e.krw)}</b><span class="meta">≈ ${twdFmt(e.krw * r)}</span></div>
+    </div>
+    <div class="exdetail">
+      <span>${esc(nameOf(e.payer))} 付</span><span>${who}・每人 ${krwFmt(e.krw / n)}</span>
+      ${e.currency === "TWD" ? `<span>原幣 ${twdFmt(e.amount)}</span>` : ""}
+    </div>
+    <div class="foot"><button class="btn sm push" data-a="editExpense" data-id="${e.id}">編輯</button></div></div></div>`;
 }
 
 function viewMoney() {
@@ -209,10 +227,7 @@ function viewMoney() {
     <h2>結算</h2>
     <div class="card">${transfers.length ? transfers.map((t) => `<div class="settle"><span>${esc(nameOf(t.from))} 付給 ${esc(nameOf(t.to))}</span><b>${krwFmt(t.amt)} <span class="meta">(${twdFmt(t.amt * r)})</span></b></div>`).join("") : `<div class="meta">大家都結清了,不用互相轉帳</div>`}</div>
     <h2>明細(${ex.length})</h2>
-    ${ex.length ? ex.map((e) => `<div class="sw" data-del="expenses" data-id="${e.id}"><div class="card"><div class="row between"><h3>${esc(e.title)}</h3><b>${krwFmt(e.krw)}</b></div>
-      <div class="meta">${esc(e.date || "")} · ${esc(e.category || "")} · ${esc(nameOf(e.payer))} 付 · 分攤 ${e.participants?.length || members().length} 人${e.currency === "TWD" ? ` · 原幣 ${twdFmt(e.amount)}` : ""}</div>
-      <div class="meta">≈ ${twdFmt(e.krw * r)}</div>
-      <div class="row" style="margin-top:6px"><button class="btn sm" data-a="editExpense" data-id="${e.id}">編輯</button></div></div></div>`).join("") + `<div class="meta" style="text-align:center">長按或向左滑卡片可刪除</div>` : `<div class="empty"><p><b>還沒有支出</b></p><p class="meta">記下每一筆花費,最後自動算出誰該付給誰。</p><button class="btn pri" data-a="addExpense">記第一筆</button></div>`}`;
+    ${ex.length ? ex.map(expenseCard).join("") + `<div class="meta" style="text-align:center">長按或向左滑卡片可刪除</div>` : `<div class="empty"><p><b>還沒有支出</b></p><p class="meta">記下每一筆花費,最後自動算出誰該付給誰。</p><button class="btn pri" data-a="addExpense">記第一筆</button></div>`}`;
 }
 
 const FLIGHT_FIELDS = [["airline", "航空公司", "text"], ["no", "航班編號", "text"], ["from", "出發機場", "text"], ["to", "抵達機場", "text"], ["dep", "出發時間", "datetime-local"], ["arr", "抵達時間", "datetime-local"]];
@@ -230,7 +245,7 @@ function lodgingCard(l) {
     ${l.booking || l.phone ? `<div class="meta">${l.booking ? "訂房編號 " + esc(l.booking) : ""}${l.booking && l.phone ? " · " : ""}${l.phone ? esc(l.phone) : ""}</div>` : ""}
     ${l.note ? `<div class="note">${esc(l.note)}</div>` : ""}
     <div class="row" style="margin-top:10px"><a class="btn sm pri" href="${esc(naverUrl({ name: l.name, url: l.url, area: l.address }))}" target="_blank" rel="noopener" style="text-decoration:none">前往 Naver Map</a>
-      <button class="btn sm" data-a="editLodging" data-id="${l.id}">編輯</button></div></div></div>`;
+      <button class="btn sm push" data-a="editLodging" data-id="${l.id}">編輯</button></div></div></div>`;
 }
 
 function lodgingForm(l = {}) {
