@@ -1,4 +1,4 @@
-import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=18";
+import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=20";
 
 const TYPES = {
   spot: { label: "景點", icon: "" },
@@ -7,10 +7,7 @@ const TYPES = {
   beauty: { label: "醫美", icon: "" },
 };
 const SUBS = {
-  spot: ["購物", "歷史文化", "自然公園", "拍照打卡", "市集夜市", "主題樂園", "漢江夜景"],
-  food: ["烤肉", "炸雞", "咖啡甜點", "小吃市場", "餐酒館", "早午餐"],
-  expo: ["美術館", "快閃展", "攝影展", "藝術空間"],
-  beauty: ["皮膚管理", "美髮", "美甲美睫", "按摩 SPA"],
+  spot: ["購物", "歷史文化", "拍照打卡", "公園市集"],
 };
 const CATS = ["餐飲", "交通", "住宿", "門票", "購物", "醫美", "其他"];
 const $ = (s) => document.querySelector(s);
@@ -386,11 +383,10 @@ function placeForm(p = {}) {
   openModal(`${sheetHead(p.id ? "編輯地點" : "新增想去的地方")}
     <label class="f">名稱</label><input id="fName" value="${esc(p.name || "")}" placeholder="例如 本家烤肉" enterkeyhint="done">
     <label class="f">類型</label><div class="chips" id="fType">${Object.entries(TYPES).map(([k, t]) => `<button type="button" class="chip ${(p.type || "spot") === k ? "on" : ""}" data-k="${k}">${t.label}</button>`).join("")}</div>
-    <label class="f">細項(選填)</label><div class="chips" id="fSub">${subChips(p.type || "spot", p.sub)}</div>
-    <label class="f">區域(用來把同區域的地點排在同一天)</label><input id="fArea" value="${esc(p.area || "")}" placeholder="例如 聖水洞、江南">
-    <label class="f">Naver Map 連結(選填)</label><input id="fUrl" type="url" value="${esc(p.url || "")}" placeholder="貼上分享連結"><div class="hint">在 Naver Map 點地點的分享,複製連結後貼上。沒貼的話,會用名稱搜尋。</div>
-    <label class="f">參考連結(選填)</label><input id="fRef" type="url" value="${esc(p.ref || "")}" placeholder="IG、部落格、YouTube…"><div class="hint">看到喜歡的貼文或文章,直接貼在這裡,大家都點得到。</div>
-    <label class="f">備註</label><textarea id="fNote" placeholder="營業時間、必點、要不要預約">${esc(p.note || "")}</textarea>
+    <div id="fSubWrap" ${SUBS[p.type || "spot"] ? "" : "hidden"}><label class="f">細項(選填)</label><div class="chips" id="fSub">${subChips(p.type || "spot", p.sub)}</div></div>
+    <label class="f">Naver Map 連結(選填)</label><input id="fUrl" type="url" value="${esc(p.url || "")}" placeholder="貼上分享連結">
+    <label class="f">參考連結(選填)</label><input id="fRef" type="url" value="${esc(p.ref || "")}" placeholder="IG、部落格、影片">
+    <label class="f">備註</label><textarea id="fNote" placeholder="想記下的事">${esc(p.note || "")}</textarea>
     <div class="actions"><button class="btn pri" data-a="savePlace" data-id="${p.id || ""}">${p.id ? "儲存變更" : "加入清單"}</button></div>`);
   if (!p.id) $("#fName").focus();
 }
@@ -449,7 +445,7 @@ const actions = {
     const name = $("#fName").value.trim();
     if (!name) return warn("#fName", "請輸入名稱");
     const obj = {
-      name, type: $("#fType .on").dataset.k, sub: $("#fSub .on")?.dataset.sub || "", area: $("#fArea").value.trim(), url: fixUrl($("#fUrl").value.trim()), ref: fixUrl($("#fRef").value.trim()),
+      name, type: $("#fType .on").dataset.k, sub: $("#fSub .on")?.dataset.sub || "", url: fixUrl($("#fUrl").value.trim()), ref: fixUrl($("#fRef").value.trim()),
       note: $("#fNote").value.trim(),
     };
     const id = el.dataset.id;
@@ -549,6 +545,7 @@ document.addEventListener("click", (e) => {
   if (chip) {
     document.querySelectorAll("#fType .chip").forEach((c) => c.classList.toggle("on", c === chip));
     $("#fSub").innerHTML = subChips(chip.dataset.k, "");
+    $("#fSubWrap").hidden = !SUBS[chip.dataset.k];
     return;
   }
   const sub = e.target.closest("#fSub .chip");
