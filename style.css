@@ -88,3 +88,4 @@ select[data-a=sort]{width:auto;padding:6px 14px;font-size:12px;border-radius:99p
 .pick input{width:20px;height:20px;flex:none}
 .pick .pt{flex:1;display:block}
 .pick .pt .meta{display:block}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:0 8px}.g2 input[type=datetime-local]{font-size:13px;padding:11px 8px}

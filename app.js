@@ -167,15 +167,51 @@ function viewMoney() {
       <div class="row" style="margin-top:6px"><button class="btn sm" data-a="editExpense" data-id="${e.id}">編輯</button></div></div></div>`).join("") + `<div class="meta" style="text-align:center">長按或向左滑卡片可刪除</div>` : `<div class="empty">還沒有支出紀錄</div>`}`;
 }
 
+const FLIGHT_FIELDS = [["airline", "航空公司", "text"], ["no", "航班編號", "text"], ["from", "出發機場", "text"], ["to", "抵達機場", "text"], ["dep", "出發時間", "datetime-local"], ["arr", "抵達時間", "datetime-local"]];
+
+function flightCard(key, title, f = {}) {
+  return `<div class="card"><div class="meta" style="margin:0 0 4px">${title}</div>
+    <div class="g2">${FLIGHT_FIELDS.map(([k, l, t]) => `<div><label class="f">${l}</label><input data-fl="${key}.${k}" type="${t}" value="${esc(f[k] || "")}"></div>`).join("")}</div></div>`;
+}
+
+function lodgingCard(l) {
+  return `<div class="sw" data-del="lodgings" data-id="${l.id}"><div class="card">
+    <h3>${esc(l.name)}</h3>
+    <div class="meta">${esc(l.checkIn || "")}${l.checkIn || l.checkOut ? " → " : ""}${esc(l.checkOut || "")}</div>
+    ${l.address ? `<div class="note">${esc(l.address)}</div>` : ""}
+    ${l.booking || l.phone ? `<div class="meta">${l.booking ? "訂房編號 " + esc(l.booking) : ""}${l.booking && l.phone ? " · " : ""}${l.phone ? esc(l.phone) : ""}</div>` : ""}
+    ${l.note ? `<div class="note">${esc(l.note)}</div>` : ""}
+    <div class="row" style="margin-top:10px"><a class="btn sm pri" href="${esc(naverUrl({ name: l.name, url: l.url, area: l.address }))}" target="_blank" rel="noopener" style="text-decoration:none">Naver Map</a>
+      <button class="btn sm" data-a="editLodging" data-id="${l.id}">編輯</button></div></div></div>`;
+}
+
+function lodgingForm(l = {}) {
+  openModal(`${sheetHead(l.id ? "編輯住宿" : "新增住宿")}
+    <label class="f">名稱</label><input id="lName" value="${esc(l.name || "")}" placeholder="民宿 / 飯店名稱">
+    <label class="f">地址</label><input id="lAddr" value="${esc(l.address || "")}">
+    <label class="f">Naver Map 連結(選填)</label><input id="lUrl" value="${esc(l.url || "")}">
+    <div class="row"><div style="flex:1"><label class="f">入住日期</label><input id="lIn" type="date" value="${esc(l.checkIn || "")}"></div>
+      <div style="flex:1"><label class="f">退房日期</label><input id="lOut" type="date" value="${esc(l.checkOut || "")}"></div></div>
+    <label class="f">訂房編號</label><input id="lBook" value="${esc(l.booking || "")}">
+    <label class="f">聯絡電話</label><input id="lPhone" value="${esc(l.phone || "")}">
+    <label class="f">備註(入住時間、門鎖密碼、房東聯絡方式)</label><textarea id="lNote">${esc(l.note || "")}</textarea>
+    <div class="actions"><button class="btn pri" data-a="saveLodging" data-id="${l.id || ""}">儲存</button></div>`);
+}
+
 function viewSettings() {
   const s = state.data.settings;
-  return `<h2>旅程</h2><div class="card">
+  const fl = s.flights || {};
+  const lods = s.lodgings || [];
+  return `<h2>機票</h2>${flightCard("out", "去程", fl.out)}${flightCard("back", "回程", fl.back)}
+    <div class="row between"><h2 style="margin:22px 2px 10px">住宿</h2><button class="btn sm pri" data-a="addLodging">新增</button></div>
+    ${lods.length ? lods.map(lodgingCard).join("") + `<div class="meta" style="text-align:center">長按或向左滑卡片可刪除</div>` : `<div class="meta" style="margin:0 2px 10px">尚未新增住宿</div>`}
+    <h2>旅程</h2><div class="card">
       <label class="f">出發日期</label><input type="date" id="sStart" value="${esc(s.startDate)}">
       <label class="f">天數</label><input type="number" id="sDays" min="1" max="30" value="${s.days}">
       <label class="f">匯率:1 韓元 = ? 新台幣</label><input type="number" id="sRate" step="0.0001" value="${s.rate}">
       <div class="meta">新增支出時會用當下匯率換算並記下,之後改匯率不影響舊帳。</div></div>
     <h2>5 位成員名字</h2><div class="card">${s.members.map((m, i) => `<label class="f">成員 ${i + 1}</label><input data-m="${i}" value="${esc(m)}">`).join("")}</div>
-    <div class="actions"><button class="btn pri" data-a="saveSettings">儲存設定</button></div>
+    <div class="meta" style="margin:10px 2px 0">機票、旅程與成員名字修改後,請按下方「儲存設定」</div><div class="actions"><button class="btn pri" data-a="saveSettings">儲存設定</button></div>
     <h2>房間</h2><div class="card"><div class="meta">邀請碼:<b>${esc(state.room)}</b>(${isCloud ? "雲端同步" : "本機測試模式"})</div>
       <div class="actions"><button class="btn" data-a="leaveRoom">離開房間</button></div></div>`;
 }
@@ -301,11 +337,25 @@ const actions = {
   },
   async saveSettings() {
     const ms = [...document.querySelectorAll("[data-m]")].map((i, k) => i.value.trim() || `成員${k + 1}`);
+    const flights = { out: {}, back: {} };
+    document.querySelectorAll("[data-fl]").forEach((i) => { const [k, f] = i.dataset.fl.split("."); flights[k][f] = i.value.trim(); });
     await store.setSettings({
+      flights,
       startDate: $("#sStart").value, days: Math.max(1, Math.min(30, Number($("#sDays").value) || 5)),
       rate: Number($("#sRate").value) > 0 ? Number($("#sRate").value) : DEFAULT_SETTINGS.rate, members: ms,
     });
     alert("已儲存");
+  },
+  addLodging: () => lodgingForm(),
+  editLodging: (el) => lodgingForm((state.data.settings.lodgings || []).find((l) => l.id === el.dataset.id)),
+  async saveLodging(el) {
+    const name = $("#lName").value.trim();
+    if (!name) return alert("請輸入住宿名稱");
+    const obj = { name, address: $("#lAddr").value.trim(), url: $("#lUrl").value.trim(), checkIn: $("#lIn").value, checkOut: $("#lOut").value, booking: $("#lBook").value.trim(), phone: $("#lPhone").value.trim(), note: $("#lNote").value.trim() };
+    const list = state.data.settings.lodgings || [];
+    const id = el.dataset.id;
+    await store.setSettings({ lodgings: id ? list.map((l) => (l.id === id ? { ...l, ...obj } : l)) : [...list, { ...obj, id: Date.now().toString(36) }] });
+    closeModal();
   },
   leaveRoom() { if (confirm("離開這個房間?(資料不會被刪除)")) { ls.set("kt:room", ""); state.room = ""; state.me = null; boot(); } },
 };
@@ -326,10 +376,12 @@ document.addEventListener("input", (e) => {
 
 // 長按 / 向左滑 刪除
 let gest = null, suppress = false;
-const COLS_LABEL = { places: "地點", expenses: "支出" };
+const COLS_LABEL = { places: "地點", expenses: "支出", lodgings: "住宿" };
 async function askDelete(sw) {
   const col = sw.dataset.del, id = sw.dataset.id;
-  if (confirm(`確定刪除這筆${COLS_LABEL[col]}?`)) await store.remove(col, id);
+  if (!confirm(`確定刪除這筆${COLS_LABEL[col]}?`)) return;
+  if (col === "lodgings") await store.setSettings({ lodgings: (state.data.settings.lodgings || []).filter((l) => l.id !== id) });
+  else await store.remove(col, id);
 }
 document.addEventListener("pointerdown", (e) => {
   const sw = e.target.closest(".sw");
