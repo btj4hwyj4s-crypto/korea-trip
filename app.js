@@ -22,7 +22,8 @@ const state = {
   me: ls.get("kt:me") === null ? null : Number(ls.get("kt:me")),
   tab: "list",
   type: "all",
-  sort: "votes",
+  q: "",
+  day: 1,
   data: { places: [], expenses: [], settings: { ...DEFAULT_SETTINGS } },
 };
 let store = null;
@@ -92,58 +93,63 @@ function gateMe() {
     ${members().map((m, i) => `<button class="btn" data-a="pickMe" data-v="${i}">${esc(m)}</button>`).join("")}</div></div>`;
 }
 
-function placeCard(p, extra = "") {
+const HEART = `<svg class="heart" viewBox="0 0 24 24" width="16" height="16"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 5 6.4 5c2 0 3.7 1.1 5.6 3.2C13.900 6.100 15.600 5 17.600 5 21 5 23.100 8.400 21.600 11.800 19.500 16.400 12 21 12 21z"/></svg>`;
+const XICON = `<svg viewBox="0 0 24 24" width="16" height="16"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
+const sheetHead = (title) => `<div class="shead"><h3>${title}</h3><button class="x" data-a="close" aria-label="關閉">${XICON}</button></div>`;
+
+function placeCard(p) {
   const t = TYPES[p.type] || TYPES.spot;
   const voted = (p.votes || []).includes(state.me);
-  return `<div class="card">
+  return `<div class="sw" data-del="places" data-id="${p.id}"><div class="card">
     <div class="row between"><h3>${esc(p.name)}</h3>
-      <button class="btn sm vote ${voted ? "on" : ""}" data-a="vote" data-id="${p.id}">想去 ${votesOf(p)}</button></div>
-    <div class="meta"><span class="tag">${t.label}</span> ${p.area ? esc(p.area) : ""} ${p.cost ? " · 預估 " + krwFmt(p.cost) : ""}</div>
+      <button class="heartbtn ${voted ? "on" : ""}" data-a="vote" data-id="${p.id}" aria-label="感興趣">${HEART}<span>${votesOf(p)}</span></button></div>
+    <div class="meta"><span class="tag">${t.label}</span> ${p.area ? esc(p.area) : ""}</div>
     ${p.note ? `<div class="note">${esc(p.note)}</div>` : ""}
-    <div class="meta">${(p.votes || []).map((v) => esc(nameOf(v))).join("、")}${p.by !== undefined ? ` · 由 ${esc(nameOf(p.by))} 新增` : ""}</div>
-    <div class="row" style="margin-top:8px">
+    <div class="meta">${votesOf(p) ? "感興趣:" + (p.votes || []).map((v) => esc(nameOf(v))).join("、") : "還沒有人表示興趣"}</div>
+    <div class="row" style="margin-top:10px">
       <a class="btn sm pri" href="${esc(naverUrl(p))}" target="_blank" rel="noopener" style="text-decoration:none">Naver Map</a>
-      <button class="btn sm" data-a="editPlace" data-id="${p.id}">編輯</button>${extra}</div></div>`;
+      <button class="btn sm" data-a="editPlace" data-id="${p.id}">編輯</button></div></div></div>`;
+}
+
+function filteredPlaces() {
+  const q = state.q.trim().toLowerCase();
+  return state.data.places
+    .filter((p) => state.type === "all" || p.type === state.type)
+    .filter((p) => !q || [p.name, p.area, p.note].some((x) => (x || "").toLowerCase().includes(q)))
+    .sort((a, b) => b.createdAt - a.createdAt);
+}
+function listBody() {
+  const ps = filteredPlaces();
+  return ps.length ? ps.map(placeCard).join("") + `<div class="meta" style="text-align:center;margin-top:6px">長按或向左滑卡片可刪除</div>` : `<div class="empty">${state.q ? "找不到符合的地點" : "還沒有收藏,按右下角「新增」第一個吧"}</div>`;
 }
 
 function viewList() {
-  let ps = state.data.places.filter((p) => state.type === "all" || p.type === state.type);
-  if (state.sort === "votes") ps.sort((a, b) => votesOf(b) - votesOf(a) || b.createdAt - a.createdAt);
-  else if (state.sort === "area") ps.sort((a, b) => (a.area || "~").localeCompare(b.area || "~", "zh-Hant"));
-  else ps.sort((a, b) => b.createdAt - a.createdAt);
   const chip = (k, l) => `<button class="chip ${state.type === k ? "on" : ""}" data-a="type" data-v="${k}">${l}</button>`;
   const all = state.data.places;
-  const top = [...all].sort((a, b) => votesOf(b) - votesOf(a))[0];
-  const hero = `<div class="hero"><div class="blob g"><span class="lbl">已收藏</span><span class="num">${all.length}</span><span class="sub">個地點</span></div>
-    <div class="blob o"><span class="lbl">最多人想去</span><span class="num sm">${top && votesOf(top) ? esc(top.name) : "—"}</span><span class="sub">${top && votesOf(top) ? votesOf(top) + " / " + members().length + " 人" : "等大家投票"}</span></div></div>`;
-  return `${hero}<div class="chips">${chip("all", "全部")}${Object.entries(TYPES).map(([k, t]) => chip(k, t.label)).join("")}</div>
-    <div class="row between" style="margin-bottom:8px"><span class="meta">${ps.length} 個地點</span>
-      <select data-a="sort" style="width:auto"><option value="votes" ${state.sort === "votes" ? "selected" : ""}>最多人想去</option>
-      <option value="area" ${state.sort === "area" ? "selected" : ""}>依區域</option><option value="new" ${state.sort === "new" ? "selected" : ""}>最新</option></select></div>
-    ${ps.length ? ps.map((p) => placeCard(p)).join("") : `<div class="empty">還沒有收藏,按右下角「新增」第一個吧</div>`}`;
+  const rank = all.filter((p) => votesOf(p) > 0).sort((a, b) => votesOf(b) - votesOf(a)).slice(0, 5);
+  const hero = `<div class="blob o wide"><span class="lbl">大家感興趣的排名</span>
+    ${rank.length ? `<div class="rank">${rank.map((p, i) => `<div class="rk"><span class="n">${i + 1}</span><span class="t">${esc(p.name)}</span><span class="c">${votesOf(p)} / ${members().length}</span></div>`).join("")}</div>` : `<span class="sub" style="margin-top:auto">按愛心表示感興趣,排名就會出現</span>`}</div>`;
+  return `${hero}<input id="q" class="search" type="search" placeholder="搜尋名稱、區域、備註" value="${esc(state.q)}">
+    <div class="chips">${chip("all", "全部")}${Object.entries(TYPES).map(([k, t]) => chip(k, t.label)).join("")}</div>
+    <div id="plist">${listBody()}</div>`;
 }
 
 function viewPlan() {
   const { days } = state.data.settings;
-  const un = state.data.places.filter((p) => !p.day).sort((a, b) => votesOf(b) - votesOf(a));
-  const opts = (cur) => `<option value="">未排</option>` + Array.from({ length: days }, (_, i) => `<option value="${i + 1}" ${cur == i + 1 ? "selected" : ""}>${dayLabel(i + 1)}</option>`).join("");
-  const item = (p) => {
-    const t = TYPES[p.type] || TYPES.spot;
-    return `<div class="card"><div class="row between"><h3>${esc(p.name)}</h3><span class="meta">想去 ${votesOf(p)}</span></div>
-      <div class="meta">${p.area ? esc(p.area) : ""}</div>
-      <div class="row" style="margin-top:8px">
-        <input class="time" type="time" value="${p.time || ""}" data-a="time" data-id="${p.id}" ${p.day ? "" : "hidden"}>
-        <select data-a="setDay" data-id="${p.id}">${opts(p.day)}</select>
-        <a class="btn sm" href="${esc(naverUrl(p))}" target="_blank" rel="noopener" style="text-decoration:none">地圖</a></div></div>`;
-  };
-  let html = `<div class="row between"><h2 style="margin:0">待排清單(${un.length})</h2><button class="btn sm" data-a="autoPlan">自動建議</button></div>
-    <div class="meta" style="margin:4px 0 8px">依票數高低、同區域排同一天,排完還可以手動調整</div>
-    ${un.length ? un.map(item).join("") : `<div class="empty" style="padding:14px 0">沒有待排的地點</div>`}`;
-  for (let d = 1; d <= days; d++) {
-    const ps = state.data.places.filter((p) => p.day == d).sort((a, b) => (a.time || "99").localeCompare(b.time || "99"));
-    html += `<h2>${dayLabel(d)}(${ps.length})</h2>${ps.length ? ps.map(item).join("") : `<div class="meta">尚未安排</div>`}`;
-  }
-  return html;
+  if (state.day > days) state.day = 1;
+  const d = state.day;
+  const ps = state.data.places.filter((p) => p.day == d).sort((a, b) => (a.time || "99").localeCompare(b.time || "99"));
+  const tabs = Array.from({ length: days }, (_, i) => `<button class="chip ${d === i + 1 ? "on" : ""}" data-a="day" data-v="${i + 1}">${dayLabel(i + 1)}</button>`).join("");
+  const item = (p) => `<div class="card">
+      <div class="row between"><h3>${esc(p.name)}</h3><input class="time" type="time" value="${p.time || ""}" data-a="time" data-id="${p.id}"></div>
+      <div class="meta">${(TYPES[p.type] || TYPES.spot).label}${p.area ? " · " + esc(p.area) : ""}</div>
+      <div class="row" style="margin-top:10px">
+        <a class="btn sm pri" href="${esc(naverUrl(p))}" target="_blank" rel="noopener" style="text-decoration:none">Naver Map</a>
+        <button class="btn sm" data-a="unplan" data-id="${p.id}">移出這天</button></div></div>`;
+  return `<div class="chips">${tabs}</div>
+    <div class="row between" style="margin-bottom:10px"><span class="meta">${ps.length} 個行程</span>
+      <div class="row"><button class="btn sm" data-a="autoPlan">自動建議</button><button class="btn sm pri" data-a="pickPlaces">新增</button></div></div>
+    ${ps.length ? ps.map(item).join("") : `<div class="empty">這天還沒有行程,按「新增」從清單導入</div>`}`;
 }
 
 function viewMoney() {
@@ -155,10 +161,10 @@ function viewMoney() {
     <h2>結算</h2>
     <div class="card">${transfers.length ? transfers.map((t) => `<div class="settle"><span>${esc(nameOf(t.from))} → ${esc(nameOf(t.to))}</span><b>${krwFmt(t.amt)} <span class="meta">(${twdFmt(t.amt * r)})</span></b></div>`).join("") : `<div class="meta">目前沒有需要結算的款項</div>`}</div>
     <h2>明細(${ex.length})</h2>
-    ${ex.length ? ex.map((e) => `<div class="card"><div class="row between"><h3>${esc(e.title)}</h3><b>${krwFmt(e.krw)}</b></div>
+    ${ex.length ? ex.map((e) => `<div class="sw" data-del="expenses" data-id="${e.id}"><div class="card"><div class="row between"><h3>${esc(e.title)}</h3><b>${krwFmt(e.krw)}</b></div>
       <div class="meta">${esc(e.date || "")} · ${esc(e.category || "")} · ${esc(nameOf(e.payer))} 付 · 分攤 ${e.participants?.length || members().length} 人${e.currency === "TWD" ? ` · 原幣 ${twdFmt(e.amount)}` : ""}</div>
       <div class="meta">≈ ${twdFmt(e.krw * r)}</div>
-      <div class="row" style="margin-top:6px"><button class="btn sm" data-a="editExpense" data-id="${e.id}">編輯</button></div></div>`).join("") : `<div class="empty">還沒有支出紀錄</div>`}`;
+      <div class="row" style="margin-top:6px"><button class="btn sm" data-a="editExpense" data-id="${e.id}">編輯</button></div></div></div>`).join("") + `<div class="meta" style="text-align:center">長按或向左滑卡片可刪除</div>` : `<div class="empty">還沒有支出紀錄</div>`}`;
 }
 
 function viewSettings() {
@@ -183,20 +189,26 @@ function openModal(html) {
 const closeModal = () => { $("#modal").hidden = true; render(); };
 
 function placeForm(p = {}) {
-  openModal(`<h3>${p.id ? "編輯地點" : "新增想去的地方"}</h3>
-    <label class="f">名稱 *</label><input id="fName" value="${esc(p.name || "")}" placeholder="例如 本家烤肉">
+  openModal(`${sheetHead(p.id ? "編輯地點" : "新增想去的地方")}
+    <label class="f">名稱</label><input id="fName" value="${esc(p.name || "")}" placeholder="例如 本家烤肉">
     <label class="f">類型</label><div class="chips" id="fType">${Object.entries(TYPES).map(([k, t]) => `<button type="button" class="chip ${(p.type || "spot") === k ? "on" : ""}" data-k="${k}">${t.label}</button>`).join("")}</div>
     <label class="f">位置/區域</label><input id="fArea" value="${esc(p.area || "")}" placeholder="例如 聖水洞、江南">
     <label class="f">Naver Map 連結(選填,留空會自動用名稱搜尋)</label><input id="fUrl" value="${esc(p.url || "")}" placeholder="貼上 Naver Map 分享連結">
-    <label class="f">預估花費(韓元,選填)</label><input id="fCost" type="number" value="${p.cost || ""}">
-    <label class="f">備註</label><textarea id="fNote" placeholder="營業時間、必點、預約資訊…">${esc(p.note || "")}</textarea>
-    <div class="actions">${p.id ? `<button class="btn danger" data-a="delPlace" data-id="${p.id}">刪除</button>` : ""}
-      <button class="btn" data-a="close">取消</button><button class="btn pri" data-a="savePlace" data-id="${p.id || ""}">儲存</button></div>`);
+    <label class="f">備註</label><textarea id="fNote" placeholder="營業時間、必點、預約資訊">${esc(p.note || "")}</textarea>
+    <div class="actions"><button class="btn pri" data-a="savePlace" data-id="${p.id || ""}">儲存</button></div>`);
+}
+
+function pickPlaces() {
+  const d = state.day;
+  const cand = state.data.places.filter((p) => p.day != d).sort((a, b) => (a.day ? 1 : 0) - (b.day ? 1 : 0) || votesOf(b) - votesOf(a));
+  openModal(`${sheetHead("從清單導入 " + dayLabel(d))}
+    ${cand.length ? `<div id="pickList">${cand.map((p) => `<label class="pick"><input type="checkbox" value="${p.id}"><span class="pt">${esc(p.name)}<span class="meta">${(TYPES[p.type] || TYPES.spot).label}${p.area ? " · " + esc(p.area) : ""}${p.day ? " · 目前在 " + dayLabel(p.day) : ""}</span></span><span class="meta">${votesOf(p)} 人</span></label>`).join("")}</div>
+    <div class="actions"><button class="btn pri" data-a="addPicked">加入</button></div>` : `<div class="empty">清單裡沒有可以導入的地點,請先到「清單」新增</div>`}`);
 }
 
 function expenseForm(e = {}) {
   const ps = e.participants || members().map((_, i) => i);
-  openModal(`<h3>${e.id ? "編輯支出" : "記一筆"}</h3>
+  openModal(`${sheetHead(e.id ? "編輯支出" : "記一筆")}
     <label class="f">項目 *</label><input id="eTitle" value="${esc(e.title || "")}" placeholder="例如 蔘雞湯">
     <div class="row"><div style="flex:2"><label class="f">金額 *</label><input id="eAmt" type="number" inputmode="decimal" value="${e.amount || ""}"></div>
       <div style="flex:1"><label class="f">幣別</label><select id="eCur"><option value="KRW" ${e.currency !== "TWD" ? "selected" : ""}>韓元</option><option value="TWD" ${e.currency === "TWD" ? "selected" : ""}>新台幣</option></select></div></div>
@@ -204,15 +216,14 @@ function expenseForm(e = {}) {
       <div style="flex:1"><label class="f">類別</label><select id="eCat">${CATS.map((c) => `<option ${e.category === c ? "selected" : ""}>${c}</option>`).join("")}</select></div></div>
     <label class="f">誰付的</label><select id="ePayer">${members().map((m, i) => `<option value="${i}" ${(e.payer ?? state.me) === i ? "selected" : ""}>${esc(m)}</option>`).join("")}</select>
     <label class="f">誰要分攤</label><div class="checks" id="eParts">${members().map((m, i) => `<label><input type="checkbox" value="${i}" ${ps.includes(i) ? "checked" : ""}>${esc(m)}</label>`).join("")}</div>
-    <div class="actions">${e.id ? `<button class="btn danger" data-a="delExpense" data-id="${e.id}">刪除</button>` : ""}
-      <button class="btn" data-a="close">取消</button><button class="btn pri" data-a="saveExpense" data-id="${e.id || ""}">儲存</button></div>`);
+    <div class="actions"><button class="btn pri" data-a="saveExpense" data-id="${e.id || ""}">儲存</button></div>`);
 }
 
 // ---------- 事件 ----------
 function autoPlan() {
   const { days } = state.data.settings;
   const cand = state.data.places.filter((p) => !p.day && votesOf(p) > 0);
-  if (!cand.length) return alert("待排清單裡還沒有被投票的地點,請先大家投票");
+  if (!cand.length) return alert("沒有「感興趣」且尚未排入行程的地點");
   if (!confirm(`要把 ${cand.length} 個有票的地點自動分配到 ${days} 天嗎?`)) return;
   const groups = {};
   cand.forEach((p) => (groups[p.area?.trim() || "未分區"] ||= []).push(p));
@@ -249,14 +260,13 @@ const actions = {
     if (!name) return alert("請輸入名稱");
     const obj = {
       name, type: $("#fType .on").dataset.k, area: $("#fArea").value.trim(), url: $("#fUrl").value.trim(),
-      cost: Number($("#fCost").value) || 0, note: $("#fNote").value.trim(),
+      note: $("#fNote").value.trim(),
     };
     const id = el.dataset.id;
     if (id) await store.update("places", id, obj);
     else await store.add("places", { ...obj, by: state.me, votes: [state.me], day: 0, time: "" });
     closeModal();
   },
-  async delPlace(el) { if (confirm("確定刪除這個地點?")) { await store.remove("places", el.dataset.id); closeModal(); } },
   async vote(el) {
     const p = byId("places", el.dataset.id);
     const v = new Set(p.votes || []);
@@ -264,6 +274,14 @@ const actions = {
     await store.update("places", p.id, { votes: [...v] });
   },
   autoPlan,
+  day(el) { state.day = Number(el.dataset.v); render(); },
+  pickPlaces,
+  async addPicked() {
+    const ids = [...document.querySelectorAll("#pickList input:checked")].map((c) => c.value);
+    await Promise.all(ids.map((id) => store.update("places", id, { day: state.day })));
+    closeModal();
+  },
+  unplan: (el) => store.update("places", el.dataset.id, { day: 0, time: "" }),
   addExpense: () => expenseForm(),
   editExpense: (el) => expenseForm(byId("expenses", el.dataset.id)),
   async saveExpense(el) {
@@ -281,7 +299,6 @@ const actions = {
     id ? await store.update("expenses", id, obj) : await store.add("expenses", obj);
     closeModal();
   },
-  async delExpense(el) { if (confirm("確定刪除這筆支出?")) { await store.remove("expenses", el.dataset.id); closeModal(); } },
   async saveSettings() {
     const ms = [...document.querySelectorAll("[data-m]")].map((i, k) => i.value.trim() || `成員${k + 1}`);
     await store.setSettings({
@@ -303,11 +320,47 @@ document.addEventListener("click", (e) => {
   const el = e.target.closest("[data-a]");
   if (el && actions[el.dataset.a] && !["SELECT", "INPUT"].includes(el.tagName)) actions[el.dataset.a](el);
 });
+document.addEventListener("input", (e) => {
+  if (e.target.id === "q") { state.q = e.target.value; $("#plist").innerHTML = listBody(); }
+});
+
+// 長按 / 向左滑 刪除
+let gest = null, suppress = false;
+const COLS_LABEL = { places: "地點", expenses: "支出" };
+async function askDelete(sw) {
+  const col = sw.dataset.del, id = sw.dataset.id;
+  if (confirm(`確定刪除這筆${COLS_LABEL[col]}?`)) await store.remove(col, id);
+}
+document.addEventListener("pointerdown", (e) => {
+  const sw = e.target.closest(".sw");
+  if (!sw || e.target.closest("a,button,input,select")) return;
+  const card = sw.querySelector(".card");
+  gest = { sw, card, x: e.clientX, y: e.clientY, dx: 0, moved: false, timer: setTimeout(() => { if (gest && !gest.moved) { suppress = true; clearSuppress(); const g = gest; gest = null; g.card.style.transform = ""; askDelete(g.sw); } }, 600) };
+});
+document.addEventListener("pointermove", (e) => {
+  if (!gest) return;
+  const dx = e.clientX - gest.x, dy = e.clientY - gest.y;
+  if (!gest.moved && Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { clearTimeout(gest.timer); gest = null; return; }
+  if (Math.abs(dx) > 8) { gest.moved = true; clearTimeout(gest.timer); }
+  if (gest.moved) { gest.dx = Math.min(0, dx); gest.card.style.transform = `translateX(${gest.dx}px)`; gest.sw.classList.add("drag"); }
+});
+const clearSuppress = () => setTimeout(() => { suppress = false; }, 350);
+const endGest = () => {
+  if (!gest) return;
+  clearTimeout(gest.timer);
+  const g = gest; gest = null;
+  g.card.style.transform = ""; g.sw.classList.remove("drag");
+  if (g.moved) { suppress = true; clearSuppress(); }
+  if (g.dx < -90) askDelete(g.sw);
+};
+document.addEventListener("pointerup", endGest);
+document.addEventListener("pointercancel", endGest);
+document.addEventListener("contextmenu", (e) => { if (e.target.closest(".sw")) e.preventDefault(); });
+document.addEventListener("click", (e) => { if (suppress) { suppress = false; e.stopPropagation(); e.preventDefault(); } }, true);
+
 document.addEventListener("change", (e) => {
   const el = e.target;
-  if (el.dataset.a === "sort") { state.sort = el.value; render(); }
-  else if (el.dataset.a === "setDay") store.update("places", el.dataset.id, { day: Number(el.value) || 0 });
-  else if (el.dataset.a === "time") store.update("places", el.dataset.id, { time: el.value });
+  if (el.dataset.a === "time") store.update("places", el.dataset.id, { time: el.value });
 });
 
 async function boot() {
@@ -315,6 +368,7 @@ async function boot() {
   store = await createStore(state.room);
   store.subscribe((d) => {
     state.data = d;
+    if (document.activeElement?.id === "q") { $("#plist").innerHTML = listBody(); return; }
     if (!$("#modal").hidden || (state.tab === "set" && document.activeElement?.matches?.("#app input"))) return; // 編輯中不重繪
     render();
   });
