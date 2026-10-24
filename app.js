@@ -1,4 +1,4 @@
-import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=9";
+import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=10";
 
 const TYPES = {
   spot: { label: "景點", icon: "" },
@@ -23,6 +23,7 @@ const state = {
   tab: "list",
   type: "all",
   q: "",
+  page: null,
   day: 1,
   data: { places: [], expenses: [], settings: { ...DEFAULT_SETTINGS } },
 };
@@ -90,13 +91,18 @@ function render() {
   if (state.me === null || state.me >= members().length) return (app.innerHTML = gateMe());
   if (state.data.error) return (app.innerHTML = `<div class="gate"><h1>連不上資料庫</h1><p class="meta">請檢查網路,或確認 Firebase 的規則設定。</p><div class="actions"><button class="btn pri" onclick="location.reload()">重新整理</button></div></div>`);
   if (state.data.ready === false) return (app.innerHTML = `<div class="gate"><p class="meta">載入中…</p></div>`);
-  const body = { list: viewList, plan: viewPlan, money: viewMoney, set: viewSettings }[state.tab]();
+  const PAGES = { trip: ["本次旅遊資訊", pageTrip], rank: ["大家感興趣的排名", pageRank], effort: ["心力小表", pageEffort] };
+  const pg = PAGES[state.page];
+  const body = pg ? pg[1]() : { list: viewList, plan: viewPlan, money: viewMoney, set: viewSettings }[state.tab]();
+  const title = esc(state.data.settings.title || "Korea Trip");
+  document.title = state.data.settings.title || "Korea Trip";
   app.innerHTML = `
-    <header class="top"><h1>Korea Trip</h1><button class="me" data-a="switchMe" aria-label="切換成員">我是 ${esc(nameOf(state.me))}</button></header>
+    ${pg ? `<header class="top"><button class="back" data-a="back" aria-label="返回">${BACK}<span>返回</span></button><h1>${pg[0]}</h1><span style="width:56px"></span></header>`
+         : `<header class="top"><h1>${title}</h1><button class="me" data-a="openEffort" aria-label="心力小表">我是 ${esc(nameOf(state.me))}</button></header>`}
     ${isCloud ? "" : `<div class="banner">尚未連線雲端:目前的內容只存在這支手機,朋友看不到,也不會同步。</div>`}
     ${body}
-    ${state.tab === "list" ? `<button class="fab" data-a="addPlace" aria-label="新增">新增</button>` : ""}
-    ${state.tab === "money" ? `<button class="fab" data-a="addExpense" aria-label="記一筆">記一筆</button>` : ""}
+    ${!pg && state.tab === "list" ? `<button class="fab" data-a="addPlace" aria-label="新增">新增</button>` : ""}
+    ${!pg && state.tab === "money" ? `<button class="fab" data-a="addExpense" aria-label="記一筆">記一筆</button>` : ""}
     <nav class="tabs">
       ${[["list", "清單"], ["plan", "行程"], ["money", "記帳"], ["set", "設定"]].map(([k, l]) => `<button data-a="tab" data-v="${k}" class="${state.tab === k ? "on" : ""}">${l}</button>`).join("")}
     </nav>`;
@@ -113,20 +119,31 @@ function gateMe() {
 }
 
 const HEART = `<svg class="heart" viewBox="0 0 24 24" width="16" height="16"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 5 6.4 5c2 0 3.7 1.1 5.6 3.2C13.900 6.100 15.600 5 17.600 5 21 5 23.100 8.400 21.600 11.800 19.500 16.400 12 21 12 21z"/></svg>`;
+const BACK = `<svg viewBox="0 0 24 24" width="16" height="16"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const XICON = `<svg viewBox="0 0 24 24" width="16" height="16"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
 const sheetHead = (title) => `<div class="shead"><h3>${title}</h3><button class="x" data-a="close" aria-label="關閉">${XICON}</button></div>`;
 
-function placeCard(p) {
+const refLabel = (u) => {
+  try {
+    const h = new URL(u).hostname.replace(/^www\./, "");
+    const map = [[/instagram/, "Instagram"], [/threads/, "Threads"], [/youtu/, "YouTube"], [/facebook|fb\./, "Facebook"], [/tiktok/, "TikTok"], [/xiaohongshu|xhslink/, "小紅書"], [/naver/, "Naver 部落格"]];
+    return (map.find(([r]) => r.test(h)) || [0, h])[1];
+  } catch { return "參考連結"; }
+};
+const fixUrl = (u) => (u && !/^https?:\/\//i.test(u) ? "https://" + u : u);
+
+function placeCard(p, rank) {
   const t = TYPES[p.type] || TYPES.spot;
   const voted = (p.votes || []).includes(state.me);
   return `<div class="sw" data-del="places" data-id="${p.id}"><div class="card">
-    <div class="row between"><h3>${esc(p.name)}</h3>
+    <div class="row between"><h3>${rank ? `<span class="rankno">${rank}</span>` : ""}${esc(p.name)}</h3>
       <button class="heartbtn ${voted ? "on" : ""}" data-a="vote" data-id="${p.id}" aria-pressed="${voted}" aria-label="${voted ? "取消感興趣" : "我有興趣"}">${HEART}<span>${votesOf(p)}</span></button></div>
     <div class="meta"><span class="tag">${t.label}</span> ${p.area ? esc(p.area) : ""}</div>
     ${p.note ? `<div class="note">${esc(p.note)}</div>` : ""}
     <div class="meta">${votesOf(p) ? "感興趣:" + (p.votes || []).map((v) => esc(nameOf(v))).join("、") : "還沒有人按愛心"}</div>
     <div class="row" style="margin-top:10px">
-      <a class="btn sm pri" href="${esc(naverUrl(p))}" target="_blank" rel="noopener" style="text-decoration:none">Naver Map</a>
+      <a class="btn sm pri" href="${esc(naverUrl(p))}" target="_blank" rel="noopener" style="text-decoration:none">前往 Naver Map</a>
+      ${p.ref && /^https?:\/\//.test(p.ref) ? `<a class="btn sm" href="${esc(p.ref)}" target="_blank" rel="noopener" style="text-decoration:none">${esc(refLabel(p.ref))}</a>` : ""}
       <button class="btn sm" data-a="editPlace" data-id="${p.id}">編輯</button></div></div></div>`;
 }
 
@@ -148,9 +165,9 @@ function viewList() {
   const st = state.data.settings;
   const rank = all.filter((p) => votesOf(p) > 0).sort((a, b) => votesOf(b) - votesOf(a)).slice(0, 3);
   const hero = `<div class="hero">
-    <button class="blob b" data-a="tripInfo">${tripSummary(st)}</button>
-    <div class="blob o"><span class="lbl">大家感興趣的排名</span>
-      ${rank.length ? `<div class="rank">${rank.map((p, i) => `<div class="rk"><span class="n">${i + 1}</span><span class="t">${esc(p.name)}</span><span class="c">${votesOf(p)}</span></div>`).join("")}</div>` : `<span class="sub" style="margin-top:auto">按愛心表示感興趣,排名就會出現</span>`}</div></div>`;
+    <button class="blob b" data-a="openTrip">${tripSummary(st)}</button>
+    <button class="blob o" data-a="openRank"><span class="lbl">大家感興趣的排名</span>
+      ${rank.length ? `<div class="rank">${rank.map((p, i) => `<div class="rk"><span class="n">${i + 1}</span><span class="t">${esc(p.name)}</span><span class="c">${votesOf(p)}</span></div>`).join("")}</div>` : `<span class="sub" style="margin-top:auto">按愛心表示感興趣,排名就會出現</span>`}${rank.length ? `<span class="line" style="opacity:.75">點擊看完整排名</span>` : ""}</button></div>`;
   return `${hero}<input id="q" class="search" type="search" placeholder="搜尋名稱、區域、備註" value="${esc(state.q)}">
     <div class="chips">${chip("all", "全部")}${Object.entries(TYPES).map(([k, t]) => chip(k, t.label)).join("")}</div>
     <div id="plist">${listBody()}</div>`;
@@ -166,7 +183,7 @@ function viewPlan() {
       <div class="row between"><h3>${esc(p.name)}</h3><input class="time" type="time" value="${p.time || ""}" data-a="time" data-id="${p.id}"></div>
       <div class="meta">${(TYPES[p.type] || TYPES.spot).label}${p.area ? " · " + esc(p.area) : ""}</div>
       <div class="row" style="margin-top:10px">
-        <a class="btn sm pri" href="${esc(naverUrl(p))}" target="_blank" rel="noopener" style="text-decoration:none">Naver Map</a>
+        <a class="btn sm pri" href="${esc(naverUrl(p))}" target="_blank" rel="noopener" style="text-decoration:none">前往 Naver Map</a>
         <button class="btn sm" data-a="unplan" data-id="${p.id}">移出</button></div></div>`;
   return `<div class="chips">${tabs}</div>
     <div class="row between" style="margin-bottom:10px"><span class="meta">${ps.length} 個行程</span>
@@ -203,7 +220,7 @@ function lodgingCard(l) {
     ${l.address ? `<div class="note">${esc(l.address)}</div>` : ""}
     ${l.booking || l.phone ? `<div class="meta">${l.booking ? "訂房編號 " + esc(l.booking) : ""}${l.booking && l.phone ? " · " : ""}${l.phone ? esc(l.phone) : ""}</div>` : ""}
     ${l.note ? `<div class="note">${esc(l.note)}</div>` : ""}
-    <div class="row" style="margin-top:10px"><a class="btn sm pri" href="${esc(naverUrl({ name: l.name, url: l.url, area: l.address }))}" target="_blank" rel="noopener" style="text-decoration:none">Naver Map</a>
+    <div class="row" style="margin-top:10px"><a class="btn sm pri" href="${esc(naverUrl({ name: l.name, url: l.url, area: l.address }))}" target="_blank" rel="noopener" style="text-decoration:none">前往 Naver Map</a>
       <button class="btn sm" data-a="editLodging" data-id="${l.id}">編輯</button></div></div></div>`;
 }
 
@@ -244,20 +261,68 @@ function collectFlights() {
   return flights;
 }
 
-function tripInfo() {
-  const s = state.data.settings;
-  const fl = s.flights || {};
-  const lods = s.lodgings || [];
-  openModal(`${sheetHead("本次旅遊基本資訊")}
-    <h2>機票</h2>${flightCard("out", "去程", fl.out)}${flightCard("back", "回程", fl.back)}
-    <div class="row between"><h2 style="margin:22px 2px 10px">住宿</h2><button class="btn sm pri" data-a="addLodging">新增</button></div>
+function pageTrip() {
+  const st = state.data.settings;
+  const fl = st.flights || {};
+  const lods = st.lodgings || [];
+  return `<h2>機票</h2>${flightCard("out", "去程", fl.out)}${flightCard("back", "回程", fl.back)}
+    <div class="row between"><h2 style="margin:22px 2px 10px">住宿</h2><button class="btn sm pri" data-a="addLodging">新增住宿</button></div>
     ${lods.length ? lods.map(lodgingCard).join("") + `<div class="meta" style="text-align:center">長按或向左滑卡片可刪除</div>` : `<div class="meta" style="margin:0 2px 10px">尚未新增住宿</div>`}
-    <div class="actions"><button class="btn pri" data-a="saveFlights">儲存</button></div>`);
+    <div class="actions"><button class="btn pri" data-a="saveFlights">儲存機票</button></div>`;
+}
+
+function pageRank() {
+  const ps = [...state.data.places].sort((a, b) => votesOf(b) - votesOf(a) || b.createdAt - a.createdAt);
+  if (!ps.length) return `<div class="empty"><p><b>還沒有地點</b></p><p class="meta">先到清單新增想去的地方。</p><button class="btn pri" data-a="goList">前往清單</button></div>`;
+  let n = 0;
+  return `<div class="meta" style="margin:0 2px 12px">依「按愛心的人數」排序。想去的就按一下愛心,可以隨時改。</div>
+    ${ps.map((p) => placeCard(p, votesOf(p) ? ++n : 0)).join("")}`;
+}
+
+function effortOf(i) {
+  const d = state.data;
+  const places = d.places.filter((p) => p.by === i).length;
+  const money = d.expenses.filter((e) => (e.by ?? e.payer) === i).length;
+  const lodg = (d.settings.lodgings || []).filter((l) => l.by === i).length;
+  const hearts = d.places.filter((p) => (p.votes || []).includes(i)).length;
+  return { places, money, lodg, hearts, total: places + money + lodg + hearts };
+}
+
+function pageEffort() {
+  const rows = members().map((m, i) => ({ m, i, ...effortOf(i) }));
+  const sum = rows.reduce((a, r) => a + r.total, 0);
+  const max = Math.max(1, ...rows.map((r) => r.total));
+  return `<div class="blob p wide"><span class="lbl">姊妹們一起累積的心力</span><span class="num">${sum}</span><span class="sub">${sum ? "這趟旅行正在慢慢長出來" : "還沒開始也沒關係,慢慢來"}</span></div>
+    ${rows.map((r) => `<div class="card"><div class="row between"><h3>${esc(r.m)}${r.i === state.me ? ` <span class="tag">你</span>` : ""}</h3><span class="effnum">${r.total}</span></div>
+      <div class="bar"><i style="width:${Math.max(6, (r.total / max) * 100)}%"></i></div>
+      <div class="meta">${r.total ? `新增地點 ${r.places} · 記帳 ${r.money} · 住宿 ${r.lodg} · 愛心 ${r.hearts}` : "暖身中,隨時加入都歡迎"}</div></div>`).join("")}
+    <div class="meta" style="text-align:center;margin:14px 0">只是好玩,沒有名次也沒有壓力。每個人的貢獻方式都不一樣。</div>
+    <div class="actions"><button class="btn" data-a="switchMe">我不是 ${esc(nameOf(state.me))},切換成員</button></div>`;
+}
+
+// ---------- 可愛小動畫 ----------
+const CHEER_SUB = ["謝謝你的用心", "這趟旅行又更完整了", "有你真好", "一起把行程變可愛", "收到,心力 +1"];
+function cheer() {
+  const mine = effortOf(state.me).total;
+  let c = $("#cheer");
+  if (!c) { c = document.createElement("div"); c.id = "cheer"; document.body.append(c); }
+  const sub = CHEER_SUB[Math.floor(Math.random() * CHEER_SUB.length)];
+  c.innerHTML = `<div class="cheerbox"><svg viewBox="0 0 24 24" width="84" height="84"><defs><clipPath id="hc"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 5 6.4 5c2 0 3.7 1.1 5.6 3.2C13.9 6.1 15.6 5 17.6 5 21 5 23.1 8.4 21.6 11.8 19.5 16.4 12 21 12 21z"/></clipPath></defs>
+    <rect class="hf" x="0" y="3" width="24" height="20" clip-path="url(#hc)"/>
+    <path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 5 6.4 5c2 0 3.7 1.1 5.6 3.2C13.9 6.1 15.6 5 17.6 5 21 5 23.1 8.4 21.6 11.8 19.5 16.4 12 21 12 21z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+    <b>姊妹,這趟旅途你付出了一點心力</b><span>${sub} · 你的心力 ${mine}</span>
+    ${[0, 1, 2, 3, 4].map((k) => `<i class="fl f${k}"></i>`).join("")}</div>`;
+  c.className = "";
+  void c.offsetWidth;
+  c.className = "show";
+  clearTimeout(c._t);
+  c._t = setTimeout(() => (c.className = ""), 2400);
 }
 
 function viewSettings() {
   const s = state.data.settings;
   return `<h2>旅程</h2><div class="card">
+      <label class="f">旅程名稱(顯示在最上方)</label><input id="sTitle" value="${esc(s.title || "")}" placeholder="Korea Trip">
       <label class="f">出發日期</label><input type="date" id="sStart" value="${esc(s.startDate)}">
       <label class="f">旅遊天數(行程頁會有幾個分頁)</label><input type="number" id="sDays" min="1" max="30" value="${s.days}">
       <label class="f">匯率:1 韓元 = ? 新台幣</label><input type="number" id="sRate" step="0.0001" value="${s.rate}">
@@ -283,6 +348,7 @@ function placeForm(p = {}) {
     <label class="f">類型</label><div class="chips" id="fType">${Object.entries(TYPES).map(([k, t]) => `<button type="button" class="chip ${(p.type || "spot") === k ? "on" : ""}" data-k="${k}">${t.label}</button>`).join("")}</div>
     <label class="f">區域(用來把同區域的地點排在同一天)</label><input id="fArea" value="${esc(p.area || "")}" placeholder="例如 聖水洞、江南">
     <label class="f">Naver Map 連結(選填)</label><input id="fUrl" type="url" value="${esc(p.url || "")}" placeholder="貼上分享連結"><div class="hint">在 Naver Map 點地點的分享,複製連結後貼上。沒貼的話,會用名稱搜尋。</div>
+    <label class="f">參考連結(選填)</label><input id="fRef" type="url" value="${esc(p.ref || "")}" placeholder="IG、部落格、YouTube…"><div class="hint">看到喜歡的貼文或文章,直接貼在這裡,大家都點得到。</div>
     <label class="f">備註</label><textarea id="fNote" placeholder="營業時間、必點、要不要預約">${esc(p.note || "")}</textarea>
     <div class="actions"><button class="btn pri" data-a="savePlace" data-id="${p.id || ""}">${p.id ? "儲存變更" : "加入清單"}</button></div>`);
   if (!p.id) $("#fName").focus();
@@ -329,6 +395,15 @@ function autoPlan() {
   toast(`已把 ${cand.length} 個地點依區域排進 ${days} 天`, () => cand.forEach((p) => store.update("places", p.id, { day: 0, time: "" })));
 }
 
+function openPage(p) {
+  state.page = p;
+  history.pushState({ page: p }, "");
+  render();
+  window.scrollTo(0, 0);
+}
+function closePage() { state.page = null; render(); }
+window.addEventListener("popstate", () => { if (state.page) closePage(); });
+
 const byId = (col, id) => state.data[col].find((x) => x.id === id);
 
 const actions = {
@@ -340,8 +415,8 @@ const actions = {
     boot();
   },
   pickMe(el) { state.me = Number(el.dataset.v); ls.set("kt:me", state.me); render(); },
-  switchMe() { state.me = null; render(); },
-  tab(el) { state.tab = el.dataset.v; render(); window.scrollTo(0, 0); },
+  switchMe() { state.me = null; state.page = null; render(); },
+  tab(el) { if (state.page) { state.page = null; if (history.state?.page) history.back(); } state.tab = el.dataset.v; render(); window.scrollTo(0, 0); },
   type(el) { state.type = el.dataset.v; render(); },
   close: closeModal,
   addPlace: () => placeForm(),
@@ -350,14 +425,14 @@ const actions = {
     const name = $("#fName").value.trim();
     if (!name) return warn("#fName", "請輸入名稱");
     const obj = {
-      name, type: $("#fType .on").dataset.k, area: $("#fArea").value.trim(), url: $("#fUrl").value.trim(),
+      name, type: $("#fType .on").dataset.k, area: $("#fArea").value.trim(), url: fixUrl($("#fUrl").value.trim()), ref: fixUrl($("#fRef").value.trim()),
       note: $("#fNote").value.trim(),
     };
     const id = el.dataset.id;
     if (id) await store.update("places", id, obj);
     else await store.add("places", { ...obj, by: state.me, votes: [state.me], day: 0, time: "" });
     closeModal();
-    toast(id ? "已儲存" : "已加入清單");
+    if (id) toast("已儲存"); else cheer();
   },
   async vote(el) {
     const p = byId("places", el.dataset.id);
@@ -374,6 +449,7 @@ const actions = {
     const prev = ids.map((id) => [id, byId("places", id).day || 0]);
     await Promise.all(ids.map((id) => store.update("places", id, { day: state.day })));
     closeModal();
+    cheer();
     toast(`已加入 ${ids.length} 個地點`, () => prev.forEach(([id, d]) => store.update("places", id, { day: d })));
   },
   unplan(el) {
@@ -395,21 +471,25 @@ const actions = {
     const old = id ? byId("expenses", id) : null;
     // 編輯時若金額與幣別沒變,沿用當初匯率換算的韓元,避免舊帳被改動
     const krw = old && old.amount === amount && old.currency === currency ? old.krw : Math.round(toKrw(amount, currency));
-    const obj = { title, amount, currency, krw, date: $("#eDate").value, category: $("#eCat").value, payer: Number($("#ePayer").value), participants };
+    const obj = { ...(id ? {} : { by: state.me }), title, amount, currency, krw, date: $("#eDate").value, category: $("#eCat").value, payer: Number($("#ePayer").value), participants };
     id ? await store.update("expenses", id, obj) : await store.add("expenses", obj);
     closeModal();
-    toast(id ? "已儲存" : "已記下這筆");
+    if (id) toast("已儲存"); else cheer();
   },
   async saveSettings() {
     const ms = [...document.querySelectorAll("[data-m]")].map((i, k) => i.value.trim() || `成員${k + 1}`);
     await store.setSettings({
-      startDate: $("#sStart").value, days: Math.max(1, Math.min(30, Number($("#sDays").value) || 5)),
+      title: $("#sTitle").value.trim() || "Korea Trip", startDate: $("#sStart").value, days: Math.max(1, Math.min(30, Number($("#sDays").value) || 5)),
       rate: Number($("#sRate").value) > 0 ? Number($("#sRate").value) : DEFAULT_SETTINGS.rate, members: ms,
     });
     toast("已儲存");
   },
-  tripInfo,
-  async saveFlights() { await store.setSettings({ flights: collectFlights() }); closeModal(); toast("已儲存"); },
+  openTrip() { openPage("trip"); },
+  openRank() { openPage("rank"); },
+  openEffort() { openPage("effort"); },
+  back() { history.state?.page ? history.back() : closePage(); },
+  goList() { closePage(); state.tab = "list"; render(); },
+  async saveFlights() { await store.setSettings({ flights: collectFlights() }); toast("已儲存機票"); },
   async addLodging() { await store.setSettings({ flights: collectFlights() }); lodgingForm(); },
   editLodging: (el) => lodgingForm((state.data.settings.lodgings || []).find((l) => l.id === el.dataset.id)),
   async saveLodging(el) {
@@ -418,8 +498,9 @@ const actions = {
     const obj = { name, address: $("#lAddr").value.trim(), url: $("#lUrl").value.trim(), checkIn: $("#lIn").value, checkOut: $("#lOut").value, booking: $("#lBook").value.trim(), phone: $("#lPhone").value.trim(), note: $("#lNote").value.trim() };
     const list = state.data.settings.lodgings || [];
     const id = el.dataset.id;
-    await store.setSettings({ lodgings: id ? list.map((l) => (l.id === id ? { ...l, ...obj } : l)) : [...list, { ...obj, id: Date.now().toString(36) }] });
-    tripInfo();
+    await store.setSettings({ lodgings: id ? list.map((l) => (l.id === id ? { ...l, ...obj } : l)) : [...list, { ...obj, id: Date.now().toString(36), by: state.me }] });
+    closeModal();
+    if (!id) cheer(); else toast("已儲存");
   },
   allParts() {
     const boxes = [...document.querySelectorAll("#eParts input")];
@@ -463,9 +544,10 @@ async function askDelete(sw) {
   const col = sw.dataset.del, id = sw.dataset.id;
   if (col === "lodgings") {
     const prev = state.data.settings.lodgings || [];
-    await store.setSettings({ lodgings: prev.filter((l) => l.id !== id) });
-    if (!$("#modal").hidden) tripInfo();
-    toast("已刪除住宿", async () => { await store.setSettings({ lodgings: prev }); if (!$("#modal").hidden) tripInfo(); });
+    const extra = state.page === "trip" ? { flights: collectFlights() } : {};
+    await store.setSettings({ ...extra, lodgings: prev.filter((l) => l.id !== id) });
+    render();
+    toast("已刪除住宿", async () => { await store.setSettings({ lodgings: prev }); render(); });
   } else {
     const { id: _i, ...snap } = byId(col, id);
     await store.remove(col, id);
@@ -510,7 +592,7 @@ async function boot() {
   store.subscribe((d) => {
     state.data = d;
     if (document.activeElement?.id === "q") { $("#plist").innerHTML = listBody(); return; }
-    if (!$("#modal").hidden || (state.tab === "set" && document.activeElement?.matches?.("#app input"))) return; // 編輯中不重繪
+    if (!$("#modal").hidden || ((state.tab === "set" || state.page === "trip") && document.activeElement?.matches?.("#app input"))) return; // 編輯中不重繪
     render();
   });
 }

@@ -1,9 +1,10 @@
-import { firebaseConfig } from "./firebase-config.js?v=9";
+import { firebaseConfig } from "./firebase-config.js?v=10";
 
 export const isCloud = !!(firebaseConfig && firebaseConfig.apiKey);
 
 export const DEFAULT_SETTINGS = {
   members: ["貝俞", "思瑜", "乃懿", "綺雯", "景岳"],
+  title: "Korea Trip",
   days: 5,
   startDate: "",
   rate: 0.023, // 1 韓元 = ? 新台幣
