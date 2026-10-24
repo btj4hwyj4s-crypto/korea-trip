@@ -1,10 +1,16 @@
-import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=10";
+import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=11";
 
 const TYPES = {
   spot: { label: "景點", icon: "" },
   food: { label: "美食", icon: "" },
   expo: { label: "展覽", icon: "" },
   beauty: { label: "醫美", icon: "" },
+};
+const SUBS = {
+  spot: ["購物", "歷史文化", "自然公園", "拍照打卡", "市集夜市", "主題樂園", "漢江夜景"],
+  food: ["烤肉", "炸雞", "咖啡甜點", "小吃市場", "餐酒館", "早午餐"],
+  expo: ["美術館", "快閃展", "攝影展", "藝術空間"],
+  beauty: ["皮膚管理", "美髮", "美甲美睫", "按摩 SPA"],
 };
 const CATS = ["餐飲", "交通", "住宿", "門票", "購物", "醫美", "其他"];
 const $ = (s) => document.querySelector(s);
@@ -23,6 +29,7 @@ const state = {
   tab: "list",
   type: "all",
   q: "",
+  sub: "",
   page: null,
   day: 1,
   data: { places: [], expenses: [], settings: { ...DEFAULT_SETTINGS } },
@@ -138,7 +145,7 @@ function placeCard(p, rank) {
   return `<div class="sw" data-del="places" data-id="${p.id}"><div class="card">
     <div class="row between"><h3>${rank ? `<span class="rankno">${rank}</span>` : ""}${esc(p.name)}</h3>
       <button class="heartbtn ${voted ? "on" : ""}" data-a="vote" data-id="${p.id}" aria-pressed="${voted}" aria-label="${voted ? "取消感興趣" : "我有興趣"}">${HEART}<span>${votesOf(p)}</span></button></div>
-    <div class="meta"><span class="tag">${t.label}</span> ${p.area ? esc(p.area) : ""}</div>
+    <div class="meta"><span class="tag">${t.label}${p.sub ? " · " + esc(p.sub) : ""}</span> ${p.area ? esc(p.area) : ""}</div>
     ${p.note ? `<div class="note">${esc(p.note)}</div>` : ""}
     <div class="meta">${votesOf(p) ? "感興趣:" + (p.votes || []).map((v) => esc(nameOf(v))).join("、") : "還沒有人按愛心"}</div>
     <div class="row" style="margin-top:10px">
@@ -151,7 +158,8 @@ function filteredPlaces() {
   const q = state.q.trim().toLowerCase();
   return state.data.places
     .filter((p) => state.type === "all" || p.type === state.type)
-    .filter((p) => !q || [p.name, p.area, p.note].some((x) => (x || "").toLowerCase().includes(q)))
+    .filter((p) => !state.sub || p.sub === state.sub)
+    .filter((p) => !q || [p.name, p.area, p.note, p.sub].some((x) => (x || "").toLowerCase().includes(q)))
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 function listBody() {
@@ -170,6 +178,7 @@ function viewList() {
       ${rank.length ? `<div class="rank">${rank.map((p, i) => `<div class="rk"><span class="n">${i + 1}</span><span class="t">${esc(p.name)}</span><span class="c">${votesOf(p)}</span></div>`).join("")}</div>` : `<span class="sub" style="margin-top:auto">按愛心表示感興趣,排名就會出現</span>`}${rank.length ? `<span class="line" style="opacity:.75">點擊看完整排名</span>` : ""}</button></div>`;
   return `${hero}<input id="q" class="search" type="search" placeholder="搜尋名稱、區域、備註" value="${esc(state.q)}">
     <div class="chips">${chip("all", "全部")}${Object.entries(TYPES).map(([k, t]) => chip(k, t.label)).join("")}</div>
+    ${SUBS[state.type] ? `<div class="chips sub">${SUBS[state.type].map((x) => `<button class="chip ${state.sub === x ? "on" : ""}" data-a="subf" data-v="${x}">${x}</button>`).join("")}</div>` : ""}
     <div id="plist">${listBody()}</div>`;
 }
 
@@ -307,16 +316,14 @@ function cheer() {
   let c = $("#cheer");
   if (!c) { c = document.createElement("div"); c.id = "cheer"; document.body.append(c); }
   const sub = CHEER_SUB[Math.floor(Math.random() * CHEER_SUB.length)];
-  c.innerHTML = `<div class="cheerbox"><svg viewBox="0 0 24 24" width="84" height="84"><defs><clipPath id="hc"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 5 6.4 5c2 0 3.7 1.1 5.6 3.2C13.9 6.1 15.6 5 17.6 5 21 5 23.1 8.4 21.6 11.8 19.5 16.4 12 21 12 21z"/></clipPath></defs>
-    <rect class="hf" x="0" y="3" width="24" height="20" clip-path="url(#hc)"/>
-    <path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 5 6.4 5c2 0 3.7 1.1 5.6 3.2C13.9 6.1 15.6 5 17.6 5 21 5 23.1 8.4 21.6 11.8 19.5 16.4 12 21 12 21z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
-    <b>姊妹,這趟旅途你付出了一點心力</b><span>${sub} · 你的心力 ${mine}</span>
-    ${[0, 1, 2, 3, 4].map((k) => `<i class="fl f${k}"></i>`).join("")}</div>`;
+  c.innerHTML = `<div class="cheerbox"><svg class="hv" viewBox="0 0 24 24" width="84" height="84"><path class="ln" pathLength="100" d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 5 6.4 5c2 0 3.7 1.1 5.6 3.2C13.9 6.1 15.6 5 17.6 5 21 5 23.1 8.4 21.6 11.8 19.5 16.4 12 21 12 21z"/></svg>
+    <svg class="sp" style="left:calc(50% - 62px);top:30px;width:18px;height:18px;animation-delay:.9s" viewBox="-9 -9 18 18" fill="#EF9F27"><path d="M0-8L2-2L8 0L2 2L0 8L-2 2L-8 0L-2-2Z"/></svg><svg class="sp" style="left:calc(50% + 44px);top:24px;width:13px;height:13px;animation-delay:1.2s" viewBox="-9 -9 18 18" fill="#ED93B1"><path d="M0-8L2-2L8 0L2 2L0 8L-2 2L-8 0L-2-2Z"/></svg><svg class="sp" style="left:calc(50% + 52px);top:92px;width:16px;height:16px;animation-delay:1s" viewBox="-9 -9 18 18" fill="#EF9F27"><path d="M0-8L2-2L8 0L2 2L0 8L-2 2L-8 0L-2-2Z"/></svg><svg class="sp" style="left:calc(50% - 58px);top:98px;width:12px;height:12px;animation-delay:1.35s" viewBox="-9 -9 18 18" fill="#ED93B1"><path d="M0-8L2-2L8 0L2 2L0 8L-2 2L-8 0L-2-2Z"/></svg>
+    <b>姊妹,這趟旅途你付出了一點心力</b><span>${sub} · 你的心力 ${mine}</span></div>`;
   c.className = "";
   void c.offsetWidth;
   c.className = "show";
   clearTimeout(c._t);
-  c._t = setTimeout(() => (c.className = ""), 2400);
+  c._t = setTimeout(() => (c.className = ""), 2900);
 }
 
 function viewSettings() {
@@ -342,10 +349,13 @@ function openModal(html) {
 }
 const closeModal = () => { $("#modal").hidden = true; render(); };
 
+const subChips = (type, cur) => (SUBS[type] || []).map((x) => `<button type="button" class="chip ${cur === x ? "on" : ""}" data-sub="${x}">${x}</button>`).join("");
+
 function placeForm(p = {}) {
   openModal(`${sheetHead(p.id ? "編輯地點" : "新增想去的地方")}
     <label class="f">名稱</label><input id="fName" value="${esc(p.name || "")}" placeholder="例如 本家烤肉" enterkeyhint="done">
     <label class="f">類型</label><div class="chips" id="fType">${Object.entries(TYPES).map(([k, t]) => `<button type="button" class="chip ${(p.type || "spot") === k ? "on" : ""}" data-k="${k}">${t.label}</button>`).join("")}</div>
+    <label class="f">細項(選填)</label><div class="chips" id="fSub">${subChips(p.type || "spot", p.sub)}</div>
     <label class="f">區域(用來把同區域的地點排在同一天)</label><input id="fArea" value="${esc(p.area || "")}" placeholder="例如 聖水洞、江南">
     <label class="f">Naver Map 連結(選填)</label><input id="fUrl" type="url" value="${esc(p.url || "")}" placeholder="貼上分享連結"><div class="hint">在 Naver Map 點地點的分享,複製連結後貼上。沒貼的話,會用名稱搜尋。</div>
     <label class="f">參考連結(選填)</label><input id="fRef" type="url" value="${esc(p.ref || "")}" placeholder="IG、部落格、YouTube…"><div class="hint">看到喜歡的貼文或文章,直接貼在這裡,大家都點得到。</div>
@@ -417,7 +427,8 @@ const actions = {
   pickMe(el) { state.me = Number(el.dataset.v); ls.set("kt:me", state.me); render(); },
   switchMe() { state.me = null; state.page = null; render(); },
   tab(el) { if (state.page) { state.page = null; if (history.state?.page) history.back(); } state.tab = el.dataset.v; render(); window.scrollTo(0, 0); },
-  type(el) { state.type = el.dataset.v; render(); },
+  type(el) { state.type = el.dataset.v; state.sub = ""; render(); },
+  subf(el) { state.sub = state.sub === el.dataset.v ? "" : el.dataset.v; render(); },
   close: closeModal,
   addPlace: () => placeForm(),
   editPlace: (el) => placeForm(byId("places", el.dataset.id)),
@@ -425,7 +436,7 @@ const actions = {
     const name = $("#fName").value.trim();
     if (!name) return warn("#fName", "請輸入名稱");
     const obj = {
-      name, type: $("#fType .on").dataset.k, area: $("#fArea").value.trim(), url: fixUrl($("#fUrl").value.trim()), ref: fixUrl($("#fRef").value.trim()),
+      name, type: $("#fType .on").dataset.k, sub: $("#fSub .on")?.dataset.sub || "", area: $("#fArea").value.trim(), url: fixUrl($("#fUrl").value.trim()), ref: fixUrl($("#fRef").value.trim()),
       note: $("#fNote").value.trim(),
     };
     const id = el.dataset.id;
@@ -519,6 +530,14 @@ document.addEventListener("click", (e) => {
   const chip = e.target.closest("#fType .chip");
   if (chip) {
     document.querySelectorAll("#fType .chip").forEach((c) => c.classList.toggle("on", c === chip));
+    $("#fSub").innerHTML = subChips(chip.dataset.k, "");
+    return;
+  }
+  const sub = e.target.closest("#fSub .chip");
+  if (sub) {
+    const was = sub.classList.contains("on");
+    document.querySelectorAll("#fSub .chip").forEach((c) => c.classList.remove("on"));
+    if (!was) sub.classList.add("on");
     return;
   }
   if (e.target.id === "modal") return closeModal();
