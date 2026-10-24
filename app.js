@@ -1,4 +1,4 @@
-import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=20";
+import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=21";
 
 const TYPES = {
   spot: { label: "景點", icon: "" },
@@ -204,7 +204,7 @@ function expenseCard(e) {
   const r = state.data.settings.rate;
   const n = e.participants?.length || members().length;
   const who = n === members().length ? "全員分攤" : `${n} 人分攤`;
-  return `<div class="sw" data-del="expenses" data-id="${e.id}"><div class="card ${e.settled ? "done" : ""}">
+  return `<div class="sw"><div class="card ${e.settled ? "done" : ""}">
     <div class="row"><span class="tag">${esc(e.category || "其他")}</span><span class="meta" style="margin:0">${shortDate(e.date)}</span>${e.settled ? `<span class="meta" style="margin:0 0 0 auto">已結清</span>` : ""}</div>
     <div class="exmain">
       <h3>${esc(e.title)}</h3>
@@ -236,7 +236,7 @@ function viewMoney() {
     ${all.length ? `<div class="chips">${chip(!state.exDate ? "on" : "", "exDate", "", "全部日期")}${dates.map((d) => chip(state.exDate === d ? "on" : "", "exDate", d, shortDate(d))).join("")}</div>
     <div class="chips sub">${[["all", "全部"], ["open", "未結清"], ["done", "已結清"]].map(([k, l]) => chip(state.exStatus === k ? "on" : "", "exStatus", k, l)).join("")}</div>
     <div class="meta" style="margin:0 2px 10px">${ex.length} 筆 · ${krwFmt(sub)}</div>` : ""}
-    ${ex.length ? ex.map(expenseCard).join("") + `<div class="meta" style="text-align:center">長按或向左滑卡片可刪除</div>` : all.length ? `<div class="empty"><p class="meta">這個條件下沒有支出</p></div>` : `<div class="empty"><p><b>還沒有支出</b></p><p class="meta">記下每一筆花費,最後自動算出誰該付給誰。</p><button class="btn pri" data-a="addExpense">記第一筆</button></div>`}`;
+    ${ex.length ? ex.map(expenseCard).join("") : all.length ? `<div class="empty"><p class="meta">這個條件下沒有支出</p></div>` : `<div class="empty"><p><b>還沒有支出</b></p><p class="meta">記下每一筆花費,最後自動算出誰該付給誰。</p><button class="btn pri" data-a="addExpense">記第一筆</button></div>`}`;
 }
 
 const FLIGHT_FIELDS = [["airline", "航空公司", "text"], ["no", "航班編號", "text"], ["from", "出發機場", "text"], ["to", "抵達機場", "text"], ["dep", "出發時間", "datetime-local"], ["arr", "抵達時間", "datetime-local"]];
@@ -409,7 +409,8 @@ function expenseForm(e = {}) {
       <div style="flex:1"><label class="f">類別</label><select id="eCat">${CATS.map((c) => `<option ${e.category === c ? "selected" : ""}>${c}</option>`).join("")}</select></div></div>
     <label class="f">誰付的</label><select id="ePayer">${members().map((m, i) => `<option value="${i}" ${(e.payer ?? state.me) === i ? "selected" : ""}>${esc(m)}</option>`).join("")}</select>
     <div class="row between"><label class="f">誰要分攤</label><button type="button" class="btn sm" data-a="allParts" style="margin-top:8px">全選 / 清除</button></div><div class="checks" id="eParts">${members().map((m, i) => `<label><input type="checkbox" value="${i}" ${ps.includes(i) ? "checked" : ""}>${esc(m)}</label>`).join("")}</div>
-    <div class="actions"><button class="btn pri" data-a="saveExpense" data-id="${e.id || ""}">${e.id ? "儲存變更" : "記下這筆"}</button></div>`);
+    <div class="actions"><button class="btn pri" data-a="saveExpense" data-id="${e.id || ""}">${e.id ? "儲存變更" : "記下這筆"}</button></div>
+    ${e.id ? `<div class="actions" style="margin-top:8px"><button class="btn danger" data-a="delExpense" data-id="${e.id}">刪除這筆支出</button></div>` : ""}`);
   if (!e.id) $("#eTitle").focus();
 }
 
@@ -481,6 +482,12 @@ const actions = {
     const e = byId("expenses", el.dataset.id), v = !e.settled;
     store.update("expenses", e.id, { settled: v });
     toast(v ? `「${e.title}」已標為結清` : `「${e.title}」已取消結清`, () => store.update("expenses", e.id, { settled: !v }));
+  },
+  async delExpense(el) {
+    const { id: _i, ...snap } = byId("expenses", el.dataset.id);
+    await store.remove("expenses", el.dataset.id);
+    closeModal();
+    toast("已刪除支出", () => store.add("expenses", snap));
   },
   addExpense: () => expenseForm(),
   editExpense: (el) => expenseForm(byId("expenses", el.dataset.id)),
@@ -590,7 +597,7 @@ async function askDelete(sw) {
 }
 document.addEventListener("pointerdown", (e) => {
   const sw = e.target.closest(".sw");
-  if (!sw || e.target.closest("a,button,input,select")) return;
+  if (!sw || !sw.dataset.del || e.target.closest("a,button,input,select")) return;
   const card = sw.querySelector(".card");
   gest = { sw, card, x: e.clientX, y: e.clientY, dx: 0, moved: false, timer: setTimeout(() => { if (gest && !gest.moved) { suppress = true; clearSuppress(); const g = gest; gest = null; g.card.style.transform = ""; askDelete(g.sw); } }, 600) };
 });
