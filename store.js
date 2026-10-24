@@ -3,7 +3,7 @@ import { firebaseConfig } from "./firebase-config.js";
 export const isCloud = !!(firebaseConfig && firebaseConfig.apiKey);
 
 export const DEFAULT_SETTINGS = {
-  members: ["成員1", "成員2", "成員3", "成員4", "成員5"],
+  members: ["貝俞", "思瑜", "乃懿", "綺雯", "景岳"],
   days: 5,
   startDate: "",
   rate: 0.023, // 1 韓元 = ? 新台幣
