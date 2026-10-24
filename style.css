@@ -89,3 +89,15 @@ select[data-a=sort]{width:auto;padding:6px 14px;font-size:12px;border-radius:99p
 .pick .pt{flex:1;display:block}
 .pick .pt .meta{display:block}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:0 8px}.g2 input[type=datetime-local]{font-size:13px;padding:11px 8px}
+.hero{align-items:stretch}
+button.blob{border:0;text-align:left;font:inherit;cursor:pointer;width:100%}
+.blob.b{background:radial-gradient(100% 80% at 80% 100%,#6f8cff 0,rgba(111,140,255,0) 65%),linear-gradient(160deg,#cfd8e8,#9fb0d6)}
+.blob .line{font-size:12px;opacity:.95;margin-top:4px;line-height:1.35;word-break:break-all}
+.blob .num.sm{margin-top:auto;margin-bottom:6px}
+.hero .blob{min-height:176px}
+.hero .rank{margin-top:auto;padding-top:10px;gap:6px}
+.hero .rk{font-size:13px}
+.hero .rk .n{font-size:16px;width:12px}
+button.blob{outline:none;color:#fff;justify-content:flex-start}
+.blob.b{background:radial-gradient(100% 80% at 80% 100%,#4a6dff 0,rgba(74,109,255,0) 70%),linear-gradient(160deg,#8aa0cf,#4d5f94)}
+.blob.b .num.sm{font-size:18px;font-weight:400;margin-top:auto;margin-bottom:8px}

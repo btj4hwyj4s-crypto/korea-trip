@@ -126,9 +126,12 @@ function listBody() {
 function viewList() {
   const chip = (k, l) => `<button class="chip ${state.type === k ? "on" : ""}" data-a="type" data-v="${k}">${l}</button>`;
   const all = state.data.places;
-  const rank = all.filter((p) => votesOf(p) > 0).sort((a, b) => votesOf(b) - votesOf(a)).slice(0, 5);
-  const hero = `<div class="blob o wide"><span class="lbl">大家感興趣的排名</span>
-    ${rank.length ? `<div class="rank">${rank.map((p, i) => `<div class="rk"><span class="n">${i + 1}</span><span class="t">${esc(p.name)}</span><span class="c">${votesOf(p)} / ${members().length}</span></div>`).join("")}</div>` : `<span class="sub" style="margin-top:auto">按愛心表示感興趣,排名就會出現</span>`}</div>`;
+  const st = state.data.settings;
+  const rank = all.filter((p) => votesOf(p) > 0).sort((a, b) => votesOf(b) - votesOf(a)).slice(0, 3);
+  const hero = `<div class="hero">
+    <button class="blob b" data-a="tripInfo">${tripSummary(st)}</button>
+    <div class="blob o"><span class="lbl">大家感興趣的排名</span>
+      ${rank.length ? `<div class="rank">${rank.map((p, i) => `<div class="rk"><span class="n">${i + 1}</span><span class="t">${esc(p.name)}</span><span class="c">${votesOf(p)}</span></div>`).join("")}</div>` : `<span class="sub" style="margin-top:auto">按愛心表示感興趣,排名就會出現</span>`}</div></div>`;
   return `${hero}<input id="q" class="search" type="search" placeholder="搜尋名稱、區域、備註" value="${esc(state.q)}">
     <div class="chips">${chip("all", "全部")}${Object.entries(TYPES).map(([k, t]) => chip(k, t.label)).join("")}</div>
     <div id="plist">${listBody()}</div>`;
@@ -198,20 +201,49 @@ function lodgingForm(l = {}) {
     <div class="actions"><button class="btn pri" data-a="saveLodging" data-id="${l.id || ""}">儲存</button></div>`);
 }
 
-function viewSettings() {
+const dm = (v) => (v ? v.slice(5, 10).replace("-", "/") : "");
+const dtm = (v) => (v ? v.slice(5, 10).replace("-", "/") + " " + v.slice(11, 16) : "");
+function tripSummary(st) {
+  let range = "尚未設定日期";
+  if (st.startDate) {
+    const e = new Date(st.startDate + "T00:00:00");
+    e.setDate(e.getDate() + st.days - 1);
+    range = `${dm(st.startDate)} – ${e.getMonth() + 1}/${e.getDate()}`;
+  }
+  const out = st.flights?.out || {};
+  const lod = st.lodgings || [];
+  return `<span class="lbl">本次旅遊資訊</span>
+    <span class="num sm">${range}</span>
+    <span class="line">去程 ${out.no || out.dep ? esc([out.no, dtm(out.dep)].filter(Boolean).join(" · ")) : "未填"}</span>
+    <span class="line">住宿 ${lod.length ? esc(lod[0].name) + (lod.length > 1 ? ` 等 ${lod.length} 間` : "") : "未填"}</span>`;
+}
+
+function collectFlights() {
+  const flights = { out: {}, back: {} };
+  document.querySelectorAll("[data-fl]").forEach((i) => { const [k, f] = i.dataset.fl.split("."); flights[k][f] = i.value.trim(); });
+  return flights;
+}
+
+function tripInfo() {
   const s = state.data.settings;
   const fl = s.flights || {};
   const lods = s.lodgings || [];
-  return `<h2>機票</h2>${flightCard("out", "去程", fl.out)}${flightCard("back", "回程", fl.back)}
+  openModal(`${sheetHead("本次旅遊基本資訊")}
+    <h2>機票</h2>${flightCard("out", "去程", fl.out)}${flightCard("back", "回程", fl.back)}
     <div class="row between"><h2 style="margin:22px 2px 10px">住宿</h2><button class="btn sm pri" data-a="addLodging">新增</button></div>
     ${lods.length ? lods.map(lodgingCard).join("") + `<div class="meta" style="text-align:center">長按或向左滑卡片可刪除</div>` : `<div class="meta" style="margin:0 2px 10px">尚未新增住宿</div>`}
-    <h2>旅程</h2><div class="card">
+    <div class="actions"><button class="btn pri" data-a="saveFlights">儲存</button></div>`);
+}
+
+function viewSettings() {
+  const s = state.data.settings;
+  return `<h2>旅程</h2><div class="card">
       <label class="f">出發日期</label><input type="date" id="sStart" value="${esc(s.startDate)}">
       <label class="f">天數</label><input type="number" id="sDays" min="1" max="30" value="${s.days}">
       <label class="f">匯率:1 韓元 = ? 新台幣</label><input type="number" id="sRate" step="0.0001" value="${s.rate}">
       <div class="meta">新增支出時會用當下匯率換算並記下,之後改匯率不影響舊帳。</div></div>
     <h2>5 位成員名字</h2><div class="card">${s.members.map((m, i) => `<label class="f">成員 ${i + 1}</label><input data-m="${i}" value="${esc(m)}">`).join("")}</div>
-    <div class="meta" style="margin:10px 2px 0">機票、旅程與成員名字修改後,請按下方「儲存設定」</div><div class="actions"><button class="btn pri" data-a="saveSettings">儲存設定</button></div>
+    <div class="meta" style="margin:10px 2px 0">旅程與成員名字修改後,請按下方「儲存設定」</div><div class="actions"><button class="btn pri" data-a="saveSettings">儲存設定</button></div>
     <h2>房間</h2><div class="card"><div class="meta">邀請碼:<b>${esc(state.room)}</b>(${isCloud ? "雲端同步" : "本機測試模式"})</div>
       <div class="actions"><button class="btn" data-a="leaveRoom">離開房間</button></div></div>`;
 }
@@ -337,16 +369,15 @@ const actions = {
   },
   async saveSettings() {
     const ms = [...document.querySelectorAll("[data-m]")].map((i, k) => i.value.trim() || `成員${k + 1}`);
-    const flights = { out: {}, back: {} };
-    document.querySelectorAll("[data-fl]").forEach((i) => { const [k, f] = i.dataset.fl.split("."); flights[k][f] = i.value.trim(); });
     await store.setSettings({
-      flights,
       startDate: $("#sStart").value, days: Math.max(1, Math.min(30, Number($("#sDays").value) || 5)),
       rate: Number($("#sRate").value) > 0 ? Number($("#sRate").value) : DEFAULT_SETTINGS.rate, members: ms,
     });
     alert("已儲存");
   },
-  addLodging: () => lodgingForm(),
+  tripInfo,
+  async saveFlights() { await store.setSettings({ flights: collectFlights() }); closeModal(); },
+  async addLodging() { await store.setSettings({ flights: collectFlights() }); lodgingForm(); },
   editLodging: (el) => lodgingForm((state.data.settings.lodgings || []).find((l) => l.id === el.dataset.id)),
   async saveLodging(el) {
     const name = $("#lName").value.trim();
@@ -355,7 +386,7 @@ const actions = {
     const list = state.data.settings.lodgings || [];
     const id = el.dataset.id;
     await store.setSettings({ lodgings: id ? list.map((l) => (l.id === id ? { ...l, ...obj } : l)) : [...list, { ...obj, id: Date.now().toString(36) }] });
-    closeModal();
+    tripInfo();
   },
   leaveRoom() { if (confirm("離開這個房間?(資料不會被刪除)")) { ls.set("kt:room", ""); state.room = ""; state.me = null; boot(); } },
 };
@@ -380,7 +411,7 @@ const COLS_LABEL = { places: "地點", expenses: "支出", lodgings: "住宿" };
 async function askDelete(sw) {
   const col = sw.dataset.del, id = sw.dataset.id;
   if (!confirm(`確定刪除這筆${COLS_LABEL[col]}?`)) return;
-  if (col === "lodgings") await store.setSettings({ lodgings: (state.data.settings.lodgings || []).filter((l) => l.id !== id) });
+  if (col === "lodgings") { await store.setSettings({ lodgings: (state.data.settings.lodgings || []).filter((l) => l.id !== id) }); tripInfo(); }
   else await store.remove(col, id);
 }
 document.addEventListener("pointerdown", (e) => {
