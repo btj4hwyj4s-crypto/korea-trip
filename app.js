@@ -1,4 +1,4 @@
-import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=30";
+import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=31";
 
 const TYPES = {
   spot: { label: "景點", icon: "" },
@@ -26,6 +26,7 @@ const state = {
   tab: "list",
   type: "all",
   q: "",
+  closed: new Set(),
   mine: false,
   exDate: "",
   exStatus: "all",
@@ -194,22 +195,56 @@ function viewList() {
     <div id="plist">${listBody()}</div>`;
 }
 
+const folderRange = (f) => (f.start && f.end ? `${f.start} – ${f.end}` : f.start ? `${f.start} 開始` : f.end ? `到 ${f.end}` : "未設時間");
+
+function folderCard(f) {
+  const items = state.data.places.filter((p) => p.folder === f.id).sort((a, b) => (a.fo || 0) - (b.fo || 0));
+  const closed = state.closed.has(f.id);
+  const inner = (p) => `<div class="fin"><div><b>${esc(p.name)}</b><div class="meta">${(TYPES[p.type] || TYPES.spot).label}${p.sub ? " · " + esc(p.sub) : ""}</div></div>
+      <div class="row" style="margin-top:8px"><a class="btn sm pri" href="${esc(naverUrl(p))}" target="_blank" rel="noopener" style="text-decoration:none">前往 Naver Map</a>
+      <button class="btn sm push" data-a="unfolder" data-id="${p.id}">移出資料夾</button></div></div>`;
+  return `<div class="card folder">
+    <div class="row between"><div><span class="tag">資料夾</span><h3 style="margin-top:6px">${esc(f.title)}</h3></div>
+      <button class="btn sm" data-a="toggleFolder" data-id="${f.id}">${closed ? "展開" : "收合"}</button></div>
+    <div class="meta">${folderRange(f)} · ${items.length} 個地點</div>
+    ${closed ? "" : items.length ? items.map(inner).join("") : `<div class="meta" style="margin:10px 0 0">還沒有地點,按下方「加入地點」</div>`}
+    <div class="foot"><button class="btn sm" data-a="pickPlaces" data-folder="${f.id}">加入地點</button><button class="btn sm push" data-a="editFolder" data-id="${f.id}">編輯</button></div></div>`;
+}
+
 function viewPlan() {
   const { days } = state.data.settings;
   if (state.day > days) state.day = 1;
   const d = state.day;
-  const ps = state.data.places.filter((p) => p.day == d).sort((a, b) => (a.time || "99").localeCompare(b.time || "99"));
+  const folders = (state.data.settings.folders || []).filter((f) => f.day === d);
+  const loose = state.data.places.filter((p) => p.day == d && !p.folder);
+  const entries = [
+    ...folders.map((f) => ({ key: f.start || "99", html: folderCard(f) })),
+    ...loose.map((p) => ({ key: p.time || "99", html: looseCard(p) })),
+  ].sort((a, b) => a.key.localeCompare(b.key));
   const tabs = Array.from({ length: days }, (_, i) => `<button class="chip ${d === i + 1 ? "on" : ""}" data-a="day" data-v="${i + 1}">${dayLabel(i + 1)}</button>`).join("");
-  const item = (p) => `<div class="card">
+  return `<div class="chips">${tabs}</div>
+    <div class="row between" style="margin-bottom:10px"><span class="meta">${entries.length} 個行程</span>
+      <div class="row"><button class="btn sm" data-a="newFolder">新增資料夾</button><button class="btn sm pri" data-a="pickPlaces">從清單加入</button></div></div>
+    ${entries.length ? entries.map((e) => e.html).join("") : (state.data.places.length ? `<div class="empty"><p><b>這天還沒有行程</b></p><p class="meta">從清單挑地點加進來,或建一個資料夾放同一區的店,例如「逛聖水洞」。</p><button class="btn pri" data-a="pickPlaces">從清單加入</button></div>` : `<div class="empty"><p><b>還沒有可以排的地點</b></p><p class="meta">先到清單新增想去的地方。</p><button class="btn pri" data-a="tab" data-v="list">前往清單</button></div>`)}`;
+}
+
+function looseCard(p) {
+  return `<div class="card">
       <div class="row between"><h3>${esc(p.name)}</h3><input class="time" type="time" value="${p.time || ""}" data-a="time" data-id="${p.id}"></div>
-      <div class="meta">${(TYPES[p.type] || TYPES.spot).label}${p.area ? " · " + esc(p.area) : ""}</div>
+      <div class="meta">${(TYPES[p.type] || TYPES.spot).label}${p.sub ? " · " + esc(p.sub) : ""}</div>
       <div class="row" style="margin-top:10px">
         <a class="btn sm pri" href="${esc(naverUrl(p))}" target="_blank" rel="noopener" style="text-decoration:none">前往 Naver Map</a>
         <button class="btn sm push" data-a="unplan" data-id="${p.id}">移出</button></div></div>`;
-  return `<div class="chips">${tabs}</div>
-    <div class="row between" style="margin-bottom:10px"><span class="meta">${ps.length} 個行程</span>
-      <div class="row"><button class="btn sm pri" data-a="pickPlaces">從清單加入</button></div></div>
-    ${ps.length ? ps.map(item).join("") : (state.data.places.length ? `<div class="empty"><p><b>這天還沒有行程</b></p><p class="meta">從大家收藏的清單挑地點加進來。</p><button class="btn pri" data-a="pickPlaces">從清單加入</button></div>` : `<div class="empty"><p><b>還沒有可以排的地點</b></p><p class="meta">先到清單新增想去的地方。</p><button class="btn pri" data-a="tab" data-v="list">前往清單</button></div>`)}`;
+}
+
+function folderForm(f = {}) {
+  openModal(`${sheetHead(f.id ? "編輯資料夾" : "新增資料夾")}
+    <label class="f">標題</label><input id="oTitle" value="${esc(f.title || "")}" placeholder="例如 逛聖水洞">
+    <label class="f">開始時間(選填)</label><input id="oStart" type="time" value="${esc(f.start || "")}">
+    <label class="f">結束時間(選填)</label><input id="oEnd" type="time" value="${esc(f.end || "")}">
+    <div class="actions"><button class="btn pri" data-a="saveFolder" data-id="${f.id || ""}">${f.id ? "儲存變更" : "建立資料夾"}</button></div>
+    ${f.id ? `<div class="actions" style="margin-top:8px"><button class="btn danger" data-a="delFolder" data-id="${f.id}">刪除資料夾(裡面的地點會留在這一天)</button></div>` : ""}`);
+  if (!f.id) $("#oTitle").focus();
 }
 
 const shortDate = (d) => (d ? d.slice(5).replace("-", "/") : "");
@@ -405,7 +440,7 @@ function placeForm(p = {}) {
   if (!p.id) $("#fName").focus();
 }
 
-const pk = { type: "all", sub: "", q: "", sel: new Set() };
+const pk = { type: "all", sub: "", q: "", sel: new Set(), folder: "" };
 
 function pickFilters() {
   const chip = (on, a, v, l) => `<button class="chip ${on ? "on" : ""}" data-a="${a}" data-v="${v}">${l}</button>`;
@@ -415,7 +450,7 @@ function pickFilters() {
 function pickItems() {
   const d = state.day, q = pk.q.trim().toLowerCase();
   const cand = state.data.places
-    .filter((p) => p.day != d)
+    .filter((p) => (pk.folder ? p.folder !== pk.folder : p.day != d))
     .filter((p) => pk.type === "all" || p.type === pk.type)
     .filter((p) => !pk.sub || p.sub === pk.sub)
     .filter((p) => !q || [p.name, p.note, p.sub].some((x) => (x || "").toLowerCase().includes(q)))
@@ -425,10 +460,11 @@ function pickItems() {
 }
 const pickCount = () => `加入所選地點${pk.sel.size ? `(${pk.sel.size})` : ""}`;
 
-function pickPlaces() {
-  Object.assign(pk, { type: "all", sub: "", q: "", sel: new Set() });
-  const any = state.data.places.some((p) => p.day != state.day);
-  openModal(`${sheetHead("加入 " + dayLabel(state.day))}
+function pickPlaces(el) {
+  Object.assign(pk, { type: "all", sub: "", q: "", sel: new Set(), folder: el?.dataset?.folder || "" });
+  const fo = (state.data.settings.folders || []).find((f) => f.id === pk.folder);
+  const any = state.data.places.some((p) => (pk.folder ? p.folder !== pk.folder : p.day != state.day));
+  openModal(`${sheetHead(fo ? "加入「" + esc(fo.title) + "」" : "加入 " + dayLabel(state.day))}
     ${any ? `<input id="pq" class="search" type="search" placeholder="搜尋名稱、備註">
     <div id="pickFilters">${pickFilters()}</div>
     <div id="pickList">${pickItems()}</div>
@@ -504,16 +540,39 @@ const actions = {
   async addPicked() {
     const ids = [...pk.sel].filter((id) => byId("places", id));
     if (!ids.length) return toast("請先勾選要加入的地點");
-    const prev = ids.map((id) => [id, byId("places", id).day || 0]);
-    await Promise.all(ids.map((id) => store.update("places", id, { day: state.day })));
+    const prev = ids.map((id) => { const p = byId("places", id); return [id, { day: p.day || 0, folder: p.folder || "", fo: p.fo || 0, time: p.time || "" }]; });
+    const fid = pk.folder;
+    await Promise.all(ids.map((id, k) => store.update("places", id, fid ? { day: state.day, folder: fid, fo: Date.now() + k, time: "" } : { day: state.day, folder: "", fo: 0 })));
     closeModal();
-    toast(`已加入 ${ids.length} 個地點`, () => prev.forEach(([id, d]) => store.update("places", id, { day: d })));
+    toast(`已加入 ${ids.length} 個地點`, () => prev.forEach(([id, v]) => store.update("places", id, v)));
   },
   unplan(el) {
-    const p = byId("places", el.dataset.id), prev = { day: p.day, time: p.time || "" };
-    store.update("places", p.id, { day: 0, time: "" });
+    const p = byId("places", el.dataset.id), prev = { day: p.day, time: p.time || "", folder: p.folder || "" };
+    store.update("places", p.id, { day: 0, time: "", folder: "" });
     toast(`已將「${p.name}」移出`, () => store.update("places", p.id, prev));
   },
+  newFolder: () => folderForm(),
+  editFolder: (el) => folderForm((state.data.settings.folders || []).find((f) => f.id === el.dataset.id)),
+  toggleFolder(el) { const id = el.dataset.id; state.closed.has(id) ? state.closed.delete(id) : state.closed.add(id); render(); },
+  async saveFolder(el) {
+    const title = $("#oTitle").value.trim();
+    if (!title) return warn("#oTitle", "請輸入資料夾標題");
+    const obj = { title, start: $("#oStart").value, end: $("#oEnd").value };
+    const list = state.data.settings.folders || [];
+    const id = el.dataset.id;
+    await store.setSettings({ folders: id ? list.map((f) => (f.id === id ? { ...f, ...obj } : f)) : [...list, { ...obj, id: "f" + Date.now().toString(36), day: state.day, by: state.me }] });
+    closeModal();
+    toast(id ? "已儲存" : "已建立資料夾");
+  },
+  async delFolder(el) {
+    const id = el.dataset.id, prev = state.data.settings.folders || [];
+    const kids = state.data.places.filter((p) => p.folder === id).map((p) => [p.id, p.fo || 0]);
+    await Promise.all(kids.map(([pid]) => store.update("places", pid, { folder: "", fo: 0 })));
+    await store.setSettings({ folders: prev.filter((f) => f.id !== id) });
+    closeModal();
+    toast("已刪除資料夾", async () => { await store.setSettings({ folders: prev }); kids.forEach(([pid, fo]) => store.update("places", pid, { folder: id, fo })); });
+  },
+  unfolder: (el) => store.update("places", el.dataset.id, { folder: "", fo: 0 }),
   exDate(el) { state.exDate = el.dataset.v; render(); },
   exStatus(el) { state.exStatus = el.dataset.v; render(); },
   toggleSettled(el) {
