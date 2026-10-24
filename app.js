@@ -1,4 +1,4 @@
-import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=12";
+import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=13";
 
 const TYPES = {
   spot: { label: "景點", icon: "" },
@@ -196,7 +196,7 @@ function viewPlan() {
         <button class="btn sm push" data-a="unplan" data-id="${p.id}">移出</button></div></div>`;
   return `<div class="chips">${tabs}</div>
     <div class="row between" style="margin-bottom:10px"><span class="meta">${ps.length} 個行程</span>
-      <div class="row"><button class="btn sm" data-a="autoPlan">自動排入</button><button class="btn sm pri" data-a="pickPlaces">從清單加入</button></div></div>
+      <div class="row"><button class="btn sm pri" data-a="pickPlaces">從清單加入</button></div></div>
     ${ps.length ? ps.map(item).join("") : (state.data.places.length ? `<div class="empty"><p><b>這天還沒有行程</b></p><p class="meta">從大家收藏的清單挑地點加進來。</p><button class="btn pri" data-a="pickPlaces">從清單加入</button></div>` : `<div class="empty"><p><b>還沒有可以排的地點</b></p><p class="meta">先到清單新增想去的地方。</p><button class="btn pri" data-a="tab" data-v="list">前往清單</button></div>`)}`;
 }
 
@@ -402,24 +402,6 @@ function expenseForm(e = {}) {
 }
 
 // ---------- 事件 ----------
-function autoPlan() {
-  const { days } = state.data.settings;
-  const cand = state.data.places.filter((p) => !p.day && votesOf(p) > 0);
-  if (!cand.length) return toast("沒有「有人按愛心、又還沒排進行程」的地點");
-  const groups = {};
-  cand.forEach((p) => (groups[p.area?.trim() || "未分區"] ||= []).push(p));
-  const gs = Object.values(groups).sort((a, b) => b.reduce((s, p) => s + votesOf(p), 0) - a.reduce((s, p) => s + votesOf(p), 0));
-  const load = Array.from({ length: days }, (_, i) => state.data.places.filter((p) => p.day == i + 1).length);
-  for (const g of gs) {
-    g.sort((a, b) => votesOf(b) - votesOf(a));
-    for (let i = 0; i < g.length; i += 4) {
-      const d = load.indexOf(Math.min(...load));
-      g.slice(i, i + 4).forEach((p) => { store.update("places", p.id, { day: d + 1 }); load[d]++; });
-    }
-  }
-  toast(`已把 ${cand.length} 個地點依區域排進 ${days} 天`, () => cand.forEach((p) => store.update("places", p.id, { day: 0, time: "" })));
-}
-
 function openPage(p) {
   state.page = p;
   history.pushState({ page: p }, "");
@@ -466,7 +448,6 @@ const actions = {
     v.has(state.me) ? v.delete(state.me) : v.add(state.me);
     await store.update("places", p.id, { votes: [...v] });
   },
-  autoPlan,
   day(el) { state.day = Number(el.dataset.v); render(); },
   pickPlaces,
   async addPicked() {
@@ -475,7 +456,6 @@ const actions = {
     const prev = ids.map((id) => [id, byId("places", id).day || 0]);
     await Promise.all(ids.map((id) => store.update("places", id, { day: state.day })));
     closeModal();
-    cheer();
     toast(`已加入 ${ids.length} 個地點`, () => prev.forEach(([id, d]) => store.update("places", id, { day: d })));
   },
   unplan(el) {
