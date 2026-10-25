@@ -1,4 +1,4 @@
-import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=36";
+import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=37";
 
 const TYPES = {
   spot: { label: "景點", icon: "" },
@@ -42,6 +42,7 @@ const naverUrl = (p) => (p.url && /^https?:\/\//.test(p.url) ? p.url : `https://
 const members = () => state.data.settings.members;
 const nameOf = (i) => members()[i] ?? "?";
 const votesOf = (p) => (p.votes || []).length;
+const twdOf = (e) => (e.currency === "TWD" ? e.amount : e.krw * state.data.settings.rate);
 const toKrw = (amount, cur) => (cur === "KRW" ? amount : amount / state.data.settings.rate);
 
 function dayLabel(i) {
@@ -56,8 +57,8 @@ function settlement() {
   const net = members().map(() => 0);
   for (const e of state.data.expenses.filter((x) => !x.settled)) {
     const ps = e.participants?.length ? e.participants : members().map((_, i) => i);
-    net[e.payer] += e.krw;
-    ps.forEach((p) => (net[p] -= e.krw / ps.length));
+    net[e.payer] += twdOf(e);
+    ps.forEach((p) => (net[p] -= twdOf(e) / ps.length));
   }
   const cr = [], db = [];
   net.forEach((v, i) => (v > 1 ? cr.push({ i, v }) : v < -1 ? db.push({ i, v: -v }) : 0));
@@ -252,15 +253,18 @@ function expenseCard(e) {
   const r = state.data.settings.rate;
   const n = e.participants?.length || members().length;
   const who = n === members().length ? "全員分攤" : `${n} 人分攤`;
+  const isTwd = e.currency === "TWD";
+  const main = isTwd ? twdFmt(e.amount) : krwFmt(e.amount);
+  const alt = isTwd ? `≈ ${krwFmt(e.krw)}` : `≈ ${twdFmt(e.krw * r)}`;
+  const per = isTwd ? twdFmt(e.amount / n) : krwFmt(e.amount / n);
   return `<div class="sw"><div class="card ${e.settled ? "done" : ""}">
     <div class="row"><span class="tag">${esc(e.category || "其他")}</span><span class="meta" style="margin:0">${shortDate(e.date)}</span>${e.settled ? `<span class="meta" style="margin:0 0 0 auto">已結清</span>` : ""}</div>
     <div class="exmain">
       <h3>${esc(e.title)}</h3>
-      <div class="amt"><b>${krwFmt(e.krw)}</b><span class="meta">≈ ${twdFmt(e.krw * r)}</span></div>
+      <div class="amt"><b>${main}</b><span class="meta">${alt}</span></div>
     </div>
     <div class="exdetail">
-      <span>${esc(nameOf(e.payer))} 付</span><span>${who}・每人 ${krwFmt(e.krw / n)}</span>
-      ${e.currency === "TWD" ? `<span>原幣 ${twdFmt(e.amount)}</span>` : ""}
+      <span>${esc(nameOf(e.payer))} 付</span><span>${who}・每人 ${per}</span>
     </div>
     <div class="foot"><button class="btn sm" data-a="toggleSettled" data-id="${e.id}">${e.settled ? "取消結清" : "標為已結清"}</button><button class="btn sm push" data-a="editExpense" data-id="${e.id}">編輯</button></div></div></div>`;
 }
@@ -268,22 +272,22 @@ function expenseCard(e) {
 function viewMoney() {
   const all = [...state.data.expenses].sort((a, b) => (b.date || "").localeCompare(a.date || "") || b.createdAt - a.createdAt);
   const open = all.filter((e) => !e.settled);
-  const total = open.reduce((s, e) => s + e.krw, 0);
-  const settledSum = all.filter((e) => e.settled).reduce((s, e) => s + e.krw, 0);
+  const total = open.reduce((s, e) => s + twdOf(e), 0);
+  const settledSum = all.filter((e) => e.settled).reduce((s, e) => s + twdOf(e), 0);
   const { transfers } = settlement();
   const r = state.data.settings.rate;
   const dates = [...new Set(all.map((e) => e.date).filter(Boolean))];
   if (state.exDate && !dates.includes(state.exDate)) state.exDate = "";
   const ex = all.filter((e) => (!state.exDate || e.date === state.exDate) && (state.exStatus === "all" || (state.exStatus === "open") === !e.settled));
-  const sub = ex.reduce((s, e) => s + e.krw, 0);
+  const sub = ex.reduce((s, e) => s + twdOf(e), 0);
   const chip = (cls, a, v, l) => `<button class="chip ${cls}" data-a="${a}" data-v="${v}">${l}</button>`;
-  return `<div class="blob o wide"><span class="lbl">未結清</span><span class="num">${krwFmt(total)}</span><span class="sub">約 ${twdFmt(total * r)} · 匯率 1 韓元 = NT$${r}${settledSum ? ` · 已結清 ${krwFmt(settledSum)}` : ""}</span></div>
+  return `<div class="blob o wide"><span class="lbl">未結清</span><span class="num">${twdFmt(total)}</span><span class="sub">約 ${krwFmt(total / r)} · 匯率 1 韓元 = NT$${r}${settledSum ? ` · 已結清 ${twdFmt(settledSum)}` : ""}</span></div>
     <h2>誰該付給誰</h2>
-    <div class="card">${transfers.length ? transfers.map((t) => `<div class="settle"><span>${esc(nameOf(t.from))} 付給 ${esc(nameOf(t.to))}</span><b>${krwFmt(t.amt)} <span class="meta">(${twdFmt(t.amt * r)})</span></b></div>`).join("") : `<div class="meta">${all.length ? "目前沒有未結清的款項" : "還沒有支出"}</div>`}</div>
+    <div class="card">${transfers.length ? transfers.map((t) => `<div class="settle"><span>${esc(nameOf(t.from))} 付給 ${esc(nameOf(t.to))}</span><b>${twdFmt(t.amt)} <span class="meta">(${krwFmt(t.amt / r)})</span></b></div>`).join("") : `<div class="meta">${all.length ? "目前沒有未結清的款項" : "還沒有支出"}</div>`}</div>
     <h2>明細</h2>
     ${all.length ? `<div class="chips">${chip(!state.exDate ? "on" : "", "exDate", "", "全部日期")}${dates.map((d) => chip(state.exDate === d ? "on" : "", "exDate", d, shortDate(d))).join("")}</div>
     <div class="chips sub">${[["all", "全部"], ["open", "未結清"], ["done", "已結清"]].map(([k, l]) => chip(state.exStatus === k ? "on" : "", "exStatus", k, l)).join("")}</div>
-    <div class="meta" style="margin:0 2px 10px">${ex.length} 筆 · ${krwFmt(sub)}</div>` : ""}
+    <div class="meta" style="margin:0 2px 10px">${ex.length} 筆 · ${twdFmt(sub)}</div>` : ""}
     ${ex.length ? ex.map(expenseCard).join("") : all.length ? `<div class="empty"><p class="meta">這個條件下沒有支出</p></div>` : `<div class="empty"><p><b>還沒有支出</b></p><p class="meta">記下每一筆花費,最後自動算出誰該付給誰。</p><button class="btn pri" data-a="addExpense">記第一筆</button></div>`}`;
 }
 
