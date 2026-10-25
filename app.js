@@ -1,4 +1,4 @@
-import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=37";
+import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=39";
 
 const TYPES = {
   spot: { label: "景點", icon: "" },
@@ -293,9 +293,31 @@ function viewMoney() {
 
 const FLIGHT_FIELDS = [["airline", "航空公司", "text"], ["no", "航班編號", "text"], ["from", "出發機場", "text"], ["to", "抵達機場", "text"], ["dep", "出發時間", "datetime-local"], ["arr", "抵達時間", "datetime-local"]];
 
-function flightCard(key, title, f = {}) {
-  return `<div class="card"><div class="meta" style="margin:0 0 4px">${title}</div>
-    <div class="g2">${FLIGHT_FIELDS.map(([k, l, t]) => `<div class="${t === "datetime-local" ? "full" : ""}"><label class="f">${l}</label><input data-fl="${key}.${k}" type="${t}" value="${esc(f[k] || "")}"></div>`).join("")}</div></div>`;
+const WD = "日一二三四五六";
+const tHM = (v) => (v ? v.slice(11, 16) : "--:--");
+const tDate = (v) => (v ? `${v.slice(5, 7)}/${v.slice(8, 10)}(${WD[new Date(v).getDay()]})` : "");
+
+function ticketCard(key, title, f = {}) {
+  const has = f.airline || f.no || f.from || f.to || f.dep || f.arr;
+  if (!has) return `<div class="card ticket empty-t"><div class="row between"><span class="tag">${title}</span></div>
+    <div class="meta" style="margin:14px 0 4px">還沒填寫${title}機票</div>
+    <div class="foot"><button class="btn sm push" data-a="editFlight" data-k="${key}">填寫</button></div></div>`;
+  return `<div class="card ticket">
+    <div class="row between"><span class="meta tk-top" style="margin:0">${esc([f.airline, f.no].filter(Boolean).join(" · "))}</span><span class="tag">${title}</span></div>
+    <div class="tk-route">
+      <div class="tk-end"><div class="tk-date">${tDate(f.dep)}</div><div class="tk-time">${tHM(f.dep)}</div><div class="tk-air">${esc(f.from || "")}</div></div>
+      <div class="tk-line"><i></i></div>
+      <div class="tk-end r"><div class="tk-date">${tDate(f.arr)}</div><div class="tk-time">${tHM(f.arr)}</div><div class="tk-air">${esc(f.to || "")}</div></div>
+    </div>
+    <div class="tk-perf"></div>
+    <div class="foot"><button class="btn sm push" data-a="editFlight" data-k="${key}">編輯</button></div></div>`;
+}
+
+function flightForm(key) {
+  const f = (state.data.settings.flights || {})[key] || {};
+  openModal(`${sheetHead(key === "out" ? "編輯去程機票" : "編輯回程機票")}
+    ${FLIGHT_FIELDS.map(([k, l, t]) => `<label class="f">${l}</label><input data-fl="${k}" type="${t}" value="${esc(f[k] || "")}">`).join("")}
+    <div class="actions"><button class="btn pri" data-a="saveFlight" data-k="${key}">儲存</button></div>`);
 }
 
 function lodgingCard(l) {
@@ -340,20 +362,14 @@ function tripSummary(st) {
     <span class="line" style="opacity:.75">點擊查看與編輯</span>`;
 }
 
-function collectFlights() {
-  const flights = { out: {}, back: {} };
-  document.querySelectorAll("[data-fl]").forEach((i) => { const [k, f] = i.dataset.fl.split("."); flights[k][f] = i.value.trim(); });
-  return flights;
-}
 
 function pageTrip() {
   const st = state.data.settings;
   const fl = st.flights || {};
   const lods = st.lodgings || [];
-  return `<h2>機票</h2>${flightCard("out", "去程", fl.out)}${flightCard("back", "回程", fl.back)}
+  return `<h2>機票</h2>${ticketCard("out", "去程", fl.out)}${ticketCard("back", "回程", fl.back)}
     <div class="row between"><h2 style="margin:22px 2px 10px">住宿</h2><button class="btn sm pri" data-a="addLodging">新增住宿</button></div>
-    ${lods.length ? lods.map(lodgingCard).join("") + `<div class="meta" style="text-align:center">長按或向左滑卡片可刪除</div>` : `<div class="meta" style="margin:0 2px 10px">尚未新增住宿</div>`}
-    <div class="actions"><button class="btn pri" data-a="saveFlights">儲存資訊</button></div>`;
+    ${lods.length ? lods.map(lodgingCard).join("") + `<div class="meta" style="text-align:center">長按或向左滑卡片可刪除</div>` : `<div class="meta" style="margin:0 2px 10px">尚未新增住宿</div>`}`;
 }
 
 function pageRank() {
@@ -632,8 +648,16 @@ const actions = {
   openEffort() { openPage("effort"); },
   back() { history.state?.page ? history.back() : closePage(); },
   goList() { closePage(); state.tab = "list"; render(); },
-  async saveFlights() { await store.setSettings({ flights: collectFlights() }); toast("已儲存"); },
-  async addLodging() { await store.setSettings({ flights: collectFlights() }); lodgingForm(); },
+  editFlight: (el) => flightForm(el.dataset.k),
+  async saveFlight(el) {
+    const k = el.dataset.k, obj = {};
+    document.querySelectorAll("#modal [data-fl]").forEach((i) => (obj[i.dataset.fl] = i.value.trim()));
+    const cur = state.data.settings.flights || {};
+    await store.setSettings({ flights: { out: cur.out || {}, back: cur.back || {}, [k]: obj } });
+    closeModal();
+    toast("已儲存機票");
+  },
+  addLodging: () => lodgingForm(),
   editLodging: (el) => lodgingForm((state.data.settings.lodgings || []).find((l) => l.id === el.dataset.id)),
   async saveLodging(el) {
     const name = $("#lName").value.trim();
@@ -719,8 +743,7 @@ async function askDelete(sw) {
   const col = sw.dataset.del, id = sw.dataset.id;
   if (col === "lodgings") {
     const prev = state.data.settings.lodgings || [];
-    const extra = state.page === "trip" ? { flights: collectFlights() } : {};
-    await store.setSettings({ ...extra, lodgings: prev.filter((l) => l.id !== id) });
+    await store.setSettings({ lodgings: prev.filter((l) => l.id !== id) });
     render();
     toast("已刪除住宿", async () => { await store.setSettings({ lodgings: prev }); render(); });
   } else {
