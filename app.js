@@ -1,4 +1,4 @@
-import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=40";
+import { createStore, isCloud, DEFAULT_SETTINGS } from "./store.js?v=41";
 
 const TYPES = {
   spot: { label: "景點", icon: "" },
@@ -118,7 +118,7 @@ function render() {
 }
 
 function gateRoom() {
-  return `<div class="gate"><h1>Korea Trip</h1><p class="meta">輸入邀請碼,進入你們 5 個人共用的房間。<br>第一次使用的人,自己取一組、再告訴其他人就可以。</p>
+  return `<div class="gate"><h1>Korea Trip</h1><p class="meta">輸入邀請碼,進入你們共用的房間。<br>第一次使用的人,自己取一組、再告訴其他人就可以。</p>
     <input id="roomIn" placeholder="邀請碼,例如 seoul-xk29q" autocapitalize="off" autocomplete="off" enterkeyhint="go">
     <div class="actions"><button class="btn pri" data-a="enterRoom">進入</button></div></div>`;
 }
@@ -430,7 +430,7 @@ function viewSettings() {
       <label class="f">旅遊天數(行程頁會有幾個分頁)</label><input type="number" id="sDays" min="1" max="30" value="${s.days}">
       <label class="f">匯率:1 韓元 = ? 新台幣</label><input type="number" id="sRate" step="0.0001" value="${s.rate}">
       <div class="meta">新增支出時會用當下匯率換算並記下,之後改匯率不影響舊帳。</div></div>
-    <h2>5 位成員名字</h2><div class="card">${s.members.map((m, i) => `<label class="f">成員 ${i + 1}</label><input data-m="${i}" value="${esc(m)}">`).join("")}</div>
+    <h2>成員名字</h2><div class="card">${s.members.map((m, i) => `<label class="f">成員 ${i + 1}</label><input data-m="${i}" value="${esc(m)}">`).join("")}</div>
     <div class="meta" style="margin:10px 2px 0">修改後請按「儲存」</div><div class="actions"><button class="btn pri" data-a="saveSettings">儲存</button></div>
     <h2>邀請朋友</h2><div class="card"><div class="meta">邀請碼:<b>${esc(state.room)}</b></div><div class="note">把連結傳給朋友,開啟後就會進到同一個房間。</div><div class="actions"><button class="btn pri" data-a="copyInvite">複製邀請連結</button></div></div>
     <h2>房間</h2><div class="card">
@@ -795,6 +795,12 @@ async function boot() {
   store = await createStore(state.room);
   store.subscribe((d) => {
     state.data = d;
+    const OLD = ["貝俞", "思瑜", "乃懿", "綺雯", "景岳"];
+    const ms = d.settings.members;
+    if (d.ready !== false && ms.length === 5 && ms.every((m, i) => m === OLD[i]) && !state.migrated) {
+      state.migrated = true;
+      store.setSettings({ members: [...OLD, "Katie"] });
+    }
     if (document.activeElement?.id === "q") { $("#plist").innerHTML = listBody(); return; }
     if (!$("#modal").hidden || ((state.tab === "set" || state.page === "trip") && document.activeElement?.matches?.("#app input"))) return; // 編輯中不重繪
     render();

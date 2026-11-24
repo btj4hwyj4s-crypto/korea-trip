@@ -1,9 +1,9 @@
-import { firebaseConfig } from "./firebase-config.js?v=40";
+import { firebaseConfig } from "./firebase-config.js?v=41";
 
 export const isCloud = !!(firebaseConfig && firebaseConfig.apiKey);
 
 export const DEFAULT_SETTINGS = {
-  members: ["貝俞", "思瑜", "乃懿", "綺雯", "景岳"],
+  members: ["貝俞", "思瑜", "乃懿", "綺雯", "景岳", "Katie"],
   title: "Korea Trip",
   days: 5,
   startDate: "",
